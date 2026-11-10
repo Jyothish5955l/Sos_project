@@ -1,5 +1,5 @@
 ---
-updated: 2026-11-10T09:15:30+05:30
+updated: 2026-11-10T09:30:10+05:30
 ---
 
 # Project State — SOS Guardian
@@ -7,31 +7,38 @@ updated: 2026-11-10T09:15:30+05:30
 ## Current Position
 
 **Milestone:** Core Delivery 1.0.0  
-**Phase:** Phase 0 — Project Setup & Architecture Planning  
-**Status:** Completed (Awaiting Phase 0 Approval to proceed to Phase 1)  
-**Plan:** Phase 0 Baseline & Planning Artifacts Finalized  
+**Phase:** Phase 1 — Existing Project Audit & Codebase Health  
+**Status:** Completed (Awaiting Phase 1 Approval to proceed to Phase 2)  
+**Plan:** Full Architectural & Codebase Audit Completed  
 
 ---
 
 ## Last Action Completed
 
-1. Extracted complete source code from `SOS-Guardian.zip` into active workspace root (`backend/`, `data/`, `static/`, `templates/`, `requirements.txt`).
-2. Configured `.gitignore` for Python, Flask, SQLite, and Web assets.
-3. Created virtual environment `.venv` and installed baseline dependencies (`Flask 3.1.3`, `Flask-CORS 6.0.5`, `python-dotenv 1.2.4`).
-4. Authored and finalized `.gsd/SPEC.md`, `.gsd/ROADMAP.md`, and `.gsd/ARCHITECTURE.md`.
-5. Generated initial `PHASE_REPORT.md` documenting Phase 0 execution.
+1. Audited full backend codebase (`app.py`, `database.py`, `gesture_detector.py`, `notifications.py`, `providers/`).
+2. Discovered root causes for:
+   - Backend startup failure (uninstalled `cv2`/`mediapipe` imported on line 1 for an unused route).
+   - Palm detection failure (CDN/WASM version mismatch, lack of CPU fallback, brittle thumb angle math, zero-tolerance debounce reset).
+   - SOS blocking bug (frontend stops and backend returns 400 when GPS is unavailable).
+   - Database schema blockers (`NOT NULL` on coordinates in `sos_events`, missing `telegram_chat_id`, orphaned rows).
+   - Notification gaps (complete absence of Telegram integration, empty SMS provider, non-functional FCM stub).
+3. Executed automated audit test scripts:
+   - `scripts/audit_db.py`: Verified tables, columns, foreign keys, and existing rows.
+   - `scripts/audit_api.py`: Tested all 8 core API endpoints under authenticated/unauthenticated sessions.
+   - `scripts/audit_security.py`: Tested cross-user data isolation and unauthorized contact deletion.
+4. Compiled detailed findings and remediation plan into `PHASE_REPORT.md`.
 
 ---
 
 ## Next Steps
 
-1. Await explicit user approval command: `APPROVE PHASE 0`.
-2. Upon approval, transition to **Phase 1: Existing Project Audit & Codebase Health**.
-3. In Phase 1:
-   - Perform static analysis and syntax inspection across backend and frontend code.
-   - Audit database schema consistency and migration history.
-   - Audit MediaPipe client-side script vs backend OpenCV duplicate routes.
-   - Catalog all existing bugs, security vulnerabilities, and dead code.
+1. Await explicit user approval command: `APPROVE PHASE 1`.
+2. Upon approval, begin **Phase 2: Core System Stabilization**:
+   - Decouple unused server-side OpenCV detector from `app.py` so the server starts cleanly.
+   - Make GPS payload resilient across frontend and backend.
+   - Migrate SQLite schema to support nullable coordinates and `telegram_chat_id`.
+   - Re-engineer client-side MediaPipe palm detector with aligned WASM assets, CPU fallback, robust thumb geometry, and sliding-window stability debouncing.
+   - Verify manual and gesture SOS end-to-end.
 
 ---
 
@@ -39,21 +46,19 @@ updated: 2026-11-10T09:15:30+05:30
 
 | Decision | Choice | Made | Affects |
 |---|---|---|---|
-| Hand Gesture Detection Topology | Pure client-side browser execution via MediaPipe Tasks Vision (`@mediapipe/tasks-vision`) | 2026-11-10 | Phase 2, Phase 5 |
-| Geolocation Dependency | Optional enrichment: fallback to missing-location status rather than blocking SOS | 2026-11-10 | Phase 2, Phase 4 |
-| Central SOS Engine | Single backend route (`/api/sos`) for all triggers (manual, gesture, voice) | 2026-11-10 | Phase 2, Phase 3, Phase 4 |
-| Execution Discipline | Strict phase-by-phase execution with mandatory `PHASE_REPORT.md` and user approval gate | 2026-11-10 | All phases |
+| Server Gesture Detection Deprecation | Remove `from gesture_detector import detect_hand` and deprecate `/api/gesture/detect` from backend | 2026-11-10 | Phase 2, Phase 5 |
+| MediaPipe CDN Versioning | Pin both JS bundle and WASM assets to matching `@mediapipe/tasks-vision@0.10.21` | 2026-11-10 | Phase 2 |
+| Palm Detection Debounce | Implement a 200ms grace window / sliding frame buffer for open palm stability | 2026-11-10 | Phase 2 |
+| Nullable GPS Support | Support `{ latitude: null, longitude: null }` with explicit missing-location status | 2026-11-10 | Phase 2, Phase 4 |
 
 ---
 
 ## Blockers
 
-*None. Phase 0 completed successfully.*
+*None. Phase 1 audit completed with all root causes diagnosed.*
 
 ---
 
 ## Concerns / Notes to Monitor
 
-- **MediaPipe CDN loading**: CDN version pinning and browser WebGL/Wasm delegate compatibility.
-- **Backend GPS validation**: Existing backend currently rejects SOS if GPS coordinates are null; needs graceful null handling in Phase 2.
-- **Notification real delivery**: Provider integrations need actual Telegram bot token and chat ID setup in `.env`.
+- SQLite schema migration must preserve existing 2 users, 3 contacts, and 9 SOS events without data loss.

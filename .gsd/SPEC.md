@@ -102,3 +102,4 @@ Upon trigger activation, the system acquires GPS coordinates (if available), per
 2. **Secret Management**: All API keys, bot tokens, and session secrets stored in `.env` and accessed strictly by backend services.
 3. **Data Integrity**: Foreign keys enforced in SQLite; transactions wrapped atomically.
 4. **Reliability**: Central SOS dispatch must succeed even if GPS or notification channels partially fail.
+

@@ -122,3 +122,4 @@ SOS Guardian is engineered as an emergency-first, low-latency assistance web app
 3. **Single Ingestion Pipeline**:
    - *Decision*: All triggers (manual, gesture, voice) converge onto a single `/api/sos` route and backend event handler.
    - *Rationale*: Eliminates code duplication, guarantees identical notification logic, and simplifies auditability.
+
