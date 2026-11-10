@@ -4,11 +4,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>SOS Guardian</title>
+    <title>SOS Guardian — Emergency Assistance & Protection</title>
 
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=3.1">
 
-    <script type="module" src="/static/app.js"></script>
+    <!-- Instant Bulletproof Tab Switching (Runs before anything else) -->
+    <script>
+        function switchDashboardTab(tabId) {
+            if (!tabId) return;
+            var tabBtns = document.querySelectorAll(".dashboard-tabs .tab-btn");
+            for (var i = 0; i < tabBtns.length; i++) {
+                if (tabBtns[i].getAttribute("data-tab") === tabId) {
+                    tabBtns[i].classList.add("active");
+                } else {
+                    tabBtns[i].classList.remove("active");
+                }
+            }
+
+            var panels = document.querySelectorAll(".tab-content");
+            for (var j = 0; j < panels.length; j++) {
+                if (panels[j].id === tabId) {
+                    panels[j].classList.remove("hidden");
+                } else {
+                    panels[j].classList.add("hidden");
+                }
+            }
+
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+        window.switchDashboardTab = switchDashboardTab;
+    </script>
+
+    <script type="module" src="/static/app.js?v=3.1"></script>
 </head>
 
 <body>
@@ -220,22 +247,27 @@
 
     <header class="topbar">
 
-        <div class="brand">
+        <div class="brand" onclick="switchDashboardTab('tabEmergency')" style="cursor: pointer;" title="Back to Emergency Center">
             <span class="brand-icon">🛡️</span>
-            SOS Guardian
+            <div class="brand-text-group">
+                <span class="brand-title">SOS Guardian</span>
+                <span class="brand-status-tag">ACTIVE PROTECTION</span>
+            </div>
         </div>
 
         <div class="user-area">
 
             <button id="topbarSosButton" class="topbar-sos-btn" type="button" title="Instant Emergency Alert">
+                <span class="sos-dot"></span>
                 🚨 Quick SOS
             </button>
 
-            <span id="dashboardUserName">
-                User
-            </span>
+            <div class="user-pill" title="Signed in as active user">
+                <span class="user-avatar-icon">👤</span>
+                <span id="dashboardUserName">User</span>
+            </div>
 
-            <button id="logoutButton" class="logout-btn">
+            <button id="logoutButton" class="logout-btn" type="button" title="Sign out of account">
                 Logout
             </button>
 
@@ -255,7 +287,7 @@
                 </h1>
 
                 <p>
-                    Your emergency protection dashboard.
+                    Your personal emergency protection command center.
                 </p>
             </div>
 
@@ -268,25 +300,29 @@
 
         <!-- ================= UPPER DASHBOARD NAVIGATION (CAROUSEL / TABS) ================= -->
         <nav class="dashboard-tabs" aria-label="Dashboard views">
-            <button type="button" class="tab-btn active" data-tab="tabEmergency">
+            <button type="button" class="tab-btn active" data-tab="tabEmergency" onclick="switchDashboardTab('tabEmergency')">
                 <span class="tab-icon">🚨</span>
                 <span class="tab-text">Emergency Center</span>
             </button>
-            <button type="button" class="tab-btn" data-tab="tabTriggers">
-                <span class="tab-icon">✋</span>
-                <span class="tab-text">AI Triggers (Camera & Voice)</span>
+            <button type="button" class="tab-btn" data-tab="tabGuardians" onclick="switchDashboardTab('tabGuardians')">
+                <span class="tab-icon">👥</span>
+                <span class="tab-text">Guardians & Tiers</span>
             </button>
-            <button type="button" class="tab-btn" data-tab="tabSafety">
+            <button type="button" class="tab-btn" data-tab="tabTriggers" onclick="switchDashboardTab('tabTriggers')">
+                <span class="tab-icon">✋</span>
+                <span class="tab-text">AI Sensors & Triggers</span>
+            </button>
+            <button type="button" class="tab-btn" data-tab="tabSafety" onclick="switchDashboardTab('tabSafety')">
                 <span class="tab-icon">⏱️</span>
                 <span class="tab-text">Safety Tools</span>
             </button>
-            <button type="button" class="tab-btn" data-tab="tabGuardians">
-                <span class="tab-icon">👥</span>
-                <span class="tab-text">Guardians & Settings</span>
-            </button>
-            <button type="button" class="tab-btn" data-tab="tabHistory">
+            <button type="button" class="tab-btn" data-tab="tabHistory" onclick="switchDashboardTab('tabHistory')">
                 <span class="tab-icon">📜</span>
                 <span class="tab-text">SOS History</span>
+            </button>
+            <button type="button" class="tab-btn" data-tab="tabSettings" onclick="switchDashboardTab('tabSettings')">
+                <span class="tab-icon">⚙️</span>
+                <span class="tab-text">Settings</span>
             </button>
         </nav>
 
@@ -367,8 +403,47 @@
                 <span class="mode-icon">📱</span>
                 <div class="mode-text">
                     <strong>Direct Cellular SMS Gateway Active (httpSMS)</strong>
-                    <p>Dispatches real SMS with clickable Google Maps GPS coordinates directly via your Android gateway (SIM1).</p>
+                    <p>Dispatches real SMS with clickable Google Maps GPS coordinates directly via your Android gateway (SIM1: +916363703957).</p>
                 </div>
+            </div>
+
+            <!-- QUICK JUMP MATRIX -->
+            <div class="quick-jump-grid">
+                <button type="button" class="quick-jump-card" onclick="switchDashboardTab('tabGuardians')">
+                    <span class="jump-icon">👥</span>
+                    <div class="jump-info">
+                        <strong>Guardians & Tiers</strong>
+                        <small>Manage contacts & priority levels</small>
+                    </div>
+                    <span class="jump-arrow">→</span>
+                </button>
+
+                <button type="button" class="quick-jump-card" onclick="switchDashboardTab('tabTriggers')">
+                    <span class="jump-icon">✋</span>
+                    <div class="jump-info">
+                        <strong>AI Sensors Hub</strong>
+                        <small>Camera gesture, voice & fall trigger</small>
+                    </div>
+                    <span class="jump-arrow">→</span>
+                </button>
+
+                <button type="button" class="quick-jump-card" onclick="switchDashboardTab('tabSafety')">
+                    <span class="jump-icon">⏱️</span>
+                    <div class="jump-info">
+                        <strong>Safety Tools</strong>
+                        <small>Check-in timer & emergency hospitals</small>
+                    </div>
+                    <span class="jump-arrow">→</span>
+                </button>
+
+                <button type="button" class="quick-jump-card" onclick="switchDashboardTab('tabSettings')">
+                    <span class="jump-icon">⚙️</span>
+                    <div class="jump-info">
+                        <strong>System Settings</strong>
+                        <small>Alert mode, siren test & gateway</small>
+                    </div>
+                    <span class="jump-arrow">→</span>
+                </button>
             </div>
 
             <!-- SYSTEM READINESS MATRIX -->
@@ -440,8 +515,125 @@
 
         </div>
 
-        <!-- ================= TAB 2: AI TRIGGERS (CAMERA & VOICE) ================= -->
+        <!-- ================= TAB 2: GUARDIANS & PRIORITY TIERS ================= -->
+        <div id="tabGuardians" class="tab-content hidden">
+
+            <div class="dashboard-view-header">
+                <div class="view-title-group">
+                    <h2>👥 Guardian Contacts & Priority Escalation Tiers</h2>
+                    <p>Configure primary and backup guardians. Live SMS texts are dispatched with clickable Google Maps GPS pins.</p>
+                </div>
+                <button type="button" class="back-to-emergency-btn" onclick="switchDashboardTab('tabEmergency')">
+                    ← Emergency Center
+                </button>
+            </div>
+
+            <!-- TIER EXPLANATION CARD -->
+            <section class="panel tier-panel">
+                <div class="panel-heading">
+                    <div>
+                        <h3>💡 How Guardian Priority Tiers Work</h3>
+                        <p class="guardian-subtitle">Your contacts are organized into 3 protection rings for reliable escalation.</p>
+                    </div>
+                </div>
+
+                <div class="tier-columns">
+                    <div class="tier-item tier-1">
+                        <div class="tier-badge-header">
+                            <span class="tier-pill">Tier 1 — Primary</span>
+                            <span class="tier-when">Immediate Alert</span>
+                        </div>
+                        <p>Immediate family (Mom, Dad, Spouse). Notified instantly on any SOS trigger with full Google Maps pin via cellular SMS.</p>
+                    </div>
+
+                    <div class="tier-item tier-2">
+                        <div class="tier-badge-header">
+                            <span class="tier-pill tier-2-pill">Tier 2 — Secondary</span>
+                            <span class="tier-when">Escalation Alert</span>
+                        </div>
+                        <p>Close friends, roommates, or neighbors. Notified after 60s if Tier 1 does not acknowledge or on manual escalation.</p>
+                    </div>
+
+                    <div class="tier-item tier-3">
+                        <div class="tier-badge-header">
+                            <span class="tier-pill tier-3-pill">Tier 3 — Backup</span>
+                            <span class="tier-when">Critical Fallback</span>
+                        </div>
+                        <p>Extended emergency contacts, local doctors, or trusted supervisors for high-severity alerts.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- CONTACTS MANAGER -->
+            <section class="panel">
+                <div class="panel-heading">
+                    <div>
+                        <h3>➕ Add Emergency Contact</h3>
+                        <p class="guardian-subtitle">📲 SMS alerts sent directly to mobile phone — no app or registration required for guardians.</p>
+                    </div>
+                </div>
+
+                <form id="contactForm">
+                    <input
+                        type="text"
+                        id="contactName"
+                        placeholder="Guardian Name (e.g. Mom, Friend)"
+                        required
+                        maxlength="60"
+                    >
+
+                    <input
+                        type="tel"
+                        id="contactPhone"
+                        placeholder="10-digit Mobile Number (e.g. 9876543210)"
+                        required
+                        pattern="^\+?[0-9\s\-()]{10,15}$"
+                        title="Please enter a valid 10-digit mobile number"
+                    >
+
+                    <input
+                        type="text"
+                        id="contactTelegram"
+                        placeholder="Telegram Chat ID or @username (optional)"
+                    >
+
+                    <select id="contactPriority" class="contact-priority-select">
+                        <option value="1">Tier 1 — Primary (Immediate Alert)</option>
+                        <option value="2">Tier 2 — Secondary (Escalation)</option>
+                        <option value="3">Tier 3 — Backup (Critical Escalation)</option>
+                    </select>
+
+                    <button type="submit" id="addContactBtn">
+                        + Add Guardian Contact
+                    </button>
+                </form>
+
+                <div class="contacts-list-header">
+                    <h4>Active Guardian Roster</h4>
+                    <small>Contacts notified in an emergency</small>
+                </div>
+
+                <div id="contactList">
+                    <div class="empty">
+                        Loading contacts...
+                    </div>
+                </div>
+            </section>
+
+        </div>
+
+        <!-- ================= TAB 3: AI SENSORS & TRIGGERS ================= -->
         <div id="tabTriggers" class="tab-content hidden">
+
+            <div class="dashboard-view-header">
+                <div class="view-title-group">
+                    <h2>✋ AI Sensors & Emergency Triggers</h2>
+                    <p>Real-time browser vision, hands-free voice speech recognition, and fall impact sensors.</p>
+                </div>
+                <button type="button" class="back-to-emergency-btn" onclick="switchDashboardTab('tabEmergency')">
+                    ← Emergency Center
+                </button>
+            </div>
 
             <!-- GESTURE GUARDIAN -->
             <section class="gesture-panel">
@@ -540,8 +732,18 @@
 
         </div>
 
-        <!-- ================= TAB 3: SAFETY TOOLS ================= -->
+        <!-- ================= TAB 4: SAFETY TOOLS ================= -->
         <div id="tabSafety" class="tab-content hidden">
+
+            <div class="dashboard-view-header">
+                <div class="view-title-group">
+                    <h2>⏱️ Personal Safety Tools & Check-In</h2>
+                    <p>Proactive welfare timers, dead-man check-ins, and geo-targeted emergency service locators.</p>
+                </div>
+                <button type="button" class="back-to-emergency-btn" onclick="switchDashboardTab('tabEmergency')">
+                    ← Emergency Center
+                </button>
+            </div>
 
             <!-- SAFETY CHECK-IN TIMER -->
             <section class="panel intelligent-card">
@@ -616,19 +818,65 @@
 
         </div>
 
-        <!-- ================= TAB 4: GUARDIANS & SETTINGS ================= -->
-        <div id="tabGuardians" class="tab-content hidden">
+        <!-- ================= TAB 5: INCIDENT HISTORY ================= -->
+        <div id="tabHistory" class="tab-content hidden">
 
-            <!-- ALERT SETTINGS & AUTO-ESCALATION CONFIG -->
-            <section class="panel alert-settings-panel">
+            <div class="dashboard-view-header">
+                <div class="view-title-group">
+                    <h2>📜 SOS Incident History & Audit Logs</h2>
+                    <p>Complete chronological audit trail of all triggered distress signals, GPS coordinates, and delivery statuses.</p>
+                </div>
+                <div class="header-action-group">
+                    <button id="btnRefreshHistory" class="btn-header-action" type="button" title="Refresh Incident Logs">
+                        🔄 Refresh
+                    </button>
+                    <button type="button" class="back-to-emergency-btn" onclick="switchDashboardTab('tabEmergency')">
+                        ← Emergency Center
+                    </button>
+                </div>
+            </div>
+
+            <section class="panel">
                 <div class="panel-heading">
                     <div>
-                        <h3>⚙️ Emergency Alert & Escalation Rules</h3>
-                        <p class="guardian-subtitle">Configure how SOS Guardian dispatches alerts and whether repeat messages should be sent.</p>
+                        <h3>Recent Emergency Events</h3>
+                        <p class="guardian-subtitle">Click "Open Location" on any incident to view the exact Google Maps GPS pin dispatched.</p>
                     </div>
                 </div>
 
-                <div class="setting-card">
+                <div id="historyList">
+                    <div class="empty">
+                        Loading history...
+                    </div>
+                </div>
+            </section>
+
+        </div>
+
+        <!-- ================= TAB 6: SETTINGS & SYSTEM GATEWAY ================= -->
+        <div id="tabSettings" class="tab-content hidden">
+
+            <div class="dashboard-view-header">
+                <div class="view-title-group">
+                    <h2>⚙️ System Settings & Gateway Diagnostics</h2>
+                    <p>Cellular SMS dispatch configuration, alert escalation policies, siren alarm test, and system telemetry.</p>
+                </div>
+                <button type="button" class="back-to-emergency-btn" onclick="switchDashboardTab('tabEmergency')">
+                    ← Emergency Center
+                </button>
+            </div>
+
+            <div class="settings-grid">
+
+                <!-- SETTING 1: ALERT ESCALATION MODE -->
+                <section class="panel setting-box">
+                    <div class="panel-heading">
+                        <div>
+                            <h3>⚡ Emergency Alert Escalation Mode</h3>
+                            <p class="guardian-subtitle">Choose between Single Alert dispatch or Multi-Tier Auto-Escalation.</p>
+                        </div>
+                    </div>
+
                     <div class="setting-main">
                         <div class="setting-text">
                             <strong>Repeat Alert Auto-Escalation</strong>
@@ -643,107 +891,113 @@
                             </label>
                         </div>
                     </div>
-                </div>
 
-                <!-- TIER EXPLANATION CARD -->
-                <div class="tier-explainer">
-                    <h4>💡 How Guardian Priority Tiers Work</h4>
-                    <div class="tier-columns">
-                        <div class="tier-item tier-1">
-                            <div class="tier-badge-header">
-                                <span class="tier-pill">Tier 1 — Primary</span>
-                                <span class="tier-when">Immediate</span>
-                            </div>
-                            <p>Immediate family (Mom, Dad, Spouse). Notified instantly on any SOS trigger with full GPS pin.</p>
+                    <div class="settings-tip">
+                        💡 <b>Tip:</b> If you only want 1 message sent to your contacts, keep this switch OFF (Single Alert Mode). Turn it ON only if you want the system to automatically page backup contacts (Tier 2 and Tier 3) if you don't respond within 60 seconds.
+                    </div>
+                </section>
+
+                <!-- SETTING 2: CELLULAR SMS GATEWAY (httpSMS) -->
+                <section class="panel setting-box">
+                    <div class="panel-heading">
+                        <div>
+                            <h3>📱 Cellular SMS Gateway (httpSMS)</h3>
+                            <p class="guardian-subtitle">Direct mobile carrier dispatch via Android phone gateway.</p>
                         </div>
-                        <div class="tier-item tier-2">
-                            <div class="tier-badge-header">
-                                <span class="tier-pill tier-2-pill">Tier 2 — Secondary</span>
-                                <span class="tier-when">Escalation Only</span>
-                            </div>
-                            <p>Close friends, neighbors, or roommates. Notified only if you manually escalate or if auto-escalation is turned on.</p>
+                        <span class="status-chip online">🟢 Gateway Active</span>
+                    </div>
+
+                    <div class="gateway-details">
+                        <div class="detail-row">
+                            <span class="detail-label">SMS Provider:</span>
+                            <strong class="detail-val">httpSMS Cellular Gateway</strong>
                         </div>
-                        <div class="tier-item tier-3">
-                            <div class="tier-badge-header">
-                                <span class="tier-pill tier-3-pill">Tier 3 — Backup</span>
-                                <span class="tier-when">Critical Fallback</span>
-                            </div>
-                            <p>Extended emergency contacts, local doctors, or trusted supervisors for high-severity alerts.</p>
+                        <div class="detail-row">
+                            <span class="detail-label">Sender Phone (SIM):</span>
+                            <strong class="detail-val">+916363703957 (Primary Gateway)</strong>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Delivery Mechanism:</span>
+                            <strong class="detail-val">Direct GSM Cellular Network (Live SMS)</strong>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Location Format:</span>
+                            <strong class="detail-val">Clickable Google Maps GPS Link</strong>
                         </div>
                     </div>
-                </div>
-            </section>
+                </section>
 
-            <!-- CONTACTS MANAGER -->
-            <section class="panel">
-                <div class="panel-heading">
-                    <div>
-                        <h3>👥 Guardian Emergency Contacts</h3>
-                        <p class="guardian-subtitle">📲 SMS alerts sent directly to mobile phone — no app or registration required for guardians.</p>
+                <!-- SETTING 3: TELEGRAM EMERGENCY GATEWAY -->
+                <section class="panel setting-box">
+                    <div class="panel-heading">
+                        <div>
+                            <h3>✈️ Telegram Notification Gateway</h3>
+                            <p class="guardian-subtitle">High-speed instant messaging backup for emergency contacts.</p>
+                        </div>
+                        <span class="status-chip online">🟢 Bot Active</span>
                     </div>
-                </div>
 
-                <form id="contactForm">
-                    <input
-                        type="text"
-                        id="contactName"
-                        placeholder="Guardian Name (e.g. Mom, Friend)"
-                        required
-                        maxlength="60"
-                    >
-
-                    <input
-                        type="tel"
-                        id="contactPhone"
-                        placeholder="10-digit Mobile Number (e.g. 9876543210)"
-                        required
-                        pattern="^\+?[0-9\s\-()]{10,15}$"
-                        title="Please enter a valid 10-digit mobile number"
-                    >
-
-                    <input
-                        type="text"
-                        id="contactTelegram"
-                        placeholder="Telegram Chat ID or @username (optional)"
-                    >
-
-                    <select id="contactPriority" class="contact-priority-select">
-                        <option value="1">Tier 1 — Primary (Immediate Alert)</option>
-                        <option value="2">Tier 2 — Secondary (Escalation)</option>
-                        <option value="3">Tier 3 — Backup (Critical Escalation)</option>
-                    </select>
-
-                    <button type="submit" id="addContactBtn">
-                        + Add Guardian Contact
-                    </button>
-                </form>
-
-                <div id="contactList">
-                    <div class="empty">
-                        Loading contacts...
+                    <div class="gateway-details">
+                        <div class="detail-row">
+                            <span class="detail-label">Bot Handle:</span>
+                            <strong class="detail-val">@SOSGuardian_Bot</strong>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Broadcast Mode:</span>
+                            <strong class="detail-val">Instant Push Notification with Coordinates</strong>
+                        </div>
                     </div>
-                </div>
-            </section>
+                </section>
 
-        </div>
-
-        <!-- ================= TAB 5: INCIDENT HISTORY ================= -->
-        <div id="tabHistory" class="tab-content hidden">
-
-            <section class="panel">
-                <div class="panel-heading">
-                    <div>
-                        <h3>📜 SOS Incident History</h3>
-                        <p class="guardian-subtitle">Audit trail of all triggered distress signals, GPS coordinates, and SMS / Telegram delivery reports.</p>
+                <!-- SETTING 4: EMERGENCY AUDIO SIREN -->
+                <section class="panel setting-box">
+                    <div class="panel-heading">
+                        <div>
+                            <h3>🔊 Emergency Audio Siren (90dB Alarm)</h3>
+                            <p class="guardian-subtitle">High-intensity acoustic distress alarm to deter attackers and attract help.</p>
+                        </div>
                     </div>
-                </div>
 
-                <div id="historyList">
-                    <div class="empty">
-                        Loading history...
+                    <p class="intelligent-desc">
+                        Test the browser-synthesized emergency warble siren. Sounds an alternating dual-tone acoustic alarm through your device speakers.
+                    </p>
+
+                    <div class="siren-actions">
+                        <button id="btnPlaySiren" class="btn btn-siren-test" type="button">
+                            🔊 Sound 90dB Siren Alarm
+                        </button>
+                        <button id="btnStopSiren" class="btn btn-siren-stop hidden" type="button">
+                            ⏹️ Silence Siren Alarm
+                        </button>
                     </div>
-                </div>
-            </section>
+                </section>
+
+                <!-- SETTING 5: SYSTEM & USER TELEMETRY -->
+                <section class="panel setting-box">
+                    <div class="panel-heading">
+                        <div>
+                            <h3>🛡️ Account & System Telemetry</h3>
+                            <p class="guardian-subtitle">SOS Guardian Core Enterprise Engine</p>
+                        </div>
+                    </div>
+
+                    <div class="gateway-details">
+                        <div class="detail-row">
+                            <span class="detail-label">User Account:</span>
+                            <strong id="settingsUserEmail" class="detail-val">jyothish</strong>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Engine Version:</span>
+                            <strong class="detail-val">v2.4 (Enterprise Production)</strong>
+                        </div>
+                        <div class="detail-row">
+                            <span class="detail-label">Database Mode:</span>
+                            <strong class="detail-val">SQLite 3 WAL (Write-Ahead Logging)</strong>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
 
         </div>
 

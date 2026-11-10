@@ -827,6 +827,11 @@ function showDashboard() {
             welcomeElement.textContent =
                 currentUser.name;
         }
+
+        const settingsEmail = document.getElementById("settingsUserEmail");
+        if (settingsEmail) {
+            settingsEmail.textContent = currentUser.email || currentUser.name || "jyothish";
+        }
     }
 
 
@@ -841,6 +846,10 @@ function showDashboard() {
     probeGpsReadiness();
 
     updateReadinessUI();
+
+    if (window.switchDashboardTab) {
+        window.switchDashboardTab("tabEmergency");
+    }
 }
 
 
@@ -3539,25 +3548,106 @@ initNearbyServices();
 setTimeout(() => initSafetyCheckin(), 1000);
 
 /* ============================================================
-   UPPER DASHBOARD TAB NAVIGATION & STREAMLINED MODE SWITCHER
+   UPPER DASHBOARD TAB NAVIGATION & CLASSY VIEW SWITCHER
    ============================================================ */
 
-function setupDashboardTabs() {
+let sirenOsc1 = null;
+let sirenInterval = null;
+let sirenGain = null;
+
+function startSirenSound() {
+    try {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === "suspended") {
+            audioCtx.resume();
+        }
+        stopSirenSound();
+
+        sirenOsc1 = audioCtx.createOscillator();
+        sirenGain = audioCtx.createGain();
+        sirenOsc1.type = "sawtooth";
+        sirenGain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+
+        let freqHigh = true;
+        sirenOsc1.frequency.setValueAtTime(960, audioCtx.currentTime);
+        sirenOsc1.connect(sirenGain);
+        sirenGain.connect(audioCtx.destination);
+        sirenOsc1.start();
+
+        sirenInterval = setInterval(() => {
+            if (!sirenOsc1 || !audioCtx) return;
+            const targetFreq = freqHigh ? 650 : 960;
+            sirenOsc1.frequency.exponentialRampToValueAtTime(targetFreq, audioCtx.currentTime + 0.35);
+            freqHigh = !freqHigh;
+        }, 380);
+
+        document.getElementById("btnPlaySiren")?.classList.add("hidden");
+        document.getElementById("btnStopSiren")?.classList.remove("hidden");
+    } catch (e) {
+        console.warn("Could not start siren audio:", e);
+    }
+}
+
+function stopSirenSound() {
+    if (sirenInterval) {
+        clearInterval(sirenInterval);
+        sirenInterval = null;
+    }
+    if (sirenOsc1) {
+        try {
+            sirenOsc1.stop();
+            sirenOsc1.disconnect();
+        } catch (e) {}
+        sirenOsc1 = null;
+    }
+    document.getElementById("btnPlaySiren")?.classList.remove("hidden");
+    document.getElementById("btnStopSiren")?.classList.add("hidden");
+}
+
+function switchDashboardTab(tabId) {
+    if (!tabId) return;
+
     const tabButtons = document.querySelectorAll(".dashboard-tabs .tab-btn");
     const tabPanels = document.querySelectorAll(".tab-content");
 
     tabButtons.forEach(btn => {
+        if (btn.getAttribute("data-tab") === tabId) {
+            btn.classList.add("active");
+        } else {
+            btn.classList.remove("active");
+        }
+    });
+
+    tabPanels.forEach(panel => {
+        if (panel.id === tabId) {
+            panel.classList.remove("hidden");
+        } else {
+            panel.classList.add("hidden");
+        }
+    });
+
+    // Auto-refresh contacts or history when entering those dashboards
+    if (tabId === "tabGuardians") {
+        loadContacts();
+    } else if (tabId === "tabHistory") {
+        loadHistory();
+    }
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+window.switchDashboardTab = switchDashboardTab;
+
+function setupDashboardTabs() {
+    const tabButtons = document.querySelectorAll(".dashboard-tabs .tab-btn");
+
+    tabButtons.forEach(btn => {
         btn.addEventListener("click", () => {
             const targetId = btn.getAttribute("data-tab");
-            if (!targetId) return;
-
-            tabButtons.forEach(b => b.classList.remove("active"));
-            tabPanels.forEach(p => p.classList.add("hidden"));
-
-            btn.classList.add("active");
-            const targetPanel = document.getElementById(targetId);
-            if (targetPanel) {
-                targetPanel.classList.remove("hidden");
+            if (targetId) {
+                switchDashboardTab(targetId);
             }
         });
     });
@@ -3567,6 +3657,15 @@ function setupDashboardTabs() {
         const mainSos = document.getElementById("sosButton");
         if (mainSos) mainSos.click();
     });
+
+    // History refresh button
+    document.getElementById("btnRefreshHistory")?.addEventListener("click", () => {
+        loadHistory();
+    });
+
+    // Siren alarm buttons
+    document.getElementById("btnPlaySiren")?.addEventListener("click", startSirenSound);
+    document.getElementById("btnStopSiren")?.addEventListener("click", stopSirenSound);
 
     // Auto-escalation toggle (Single alert mode vs repeat alerts)
     const toggleEscalation = document.getElementById("toggleAutoEscalation");
