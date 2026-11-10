@@ -152,6 +152,41 @@ def initialize_database():
 
 
     # --------------------------------------------------------
+    # NOTIFICATION LOGS
+    # --------------------------------------------------------
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS notification_logs (
+
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            sos_event_id INTEGER,
+
+            contact_id INTEGER,
+
+            channel TEXT NOT NULL,
+
+            recipient TEXT NOT NULL,
+
+            status TEXT NOT NULL,
+
+            provider TEXT,
+
+            error_message TEXT,
+
+            created_at TIMESTAMP
+                DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (sos_event_id)
+                REFERENCES sos_events(id),
+
+            FOREIGN KEY (contact_id)
+                REFERENCES emergency_contacts(id)
+        )
+    """)
+
+
+    # --------------------------------------------------------
     # DATABASE MIGRATION
     # --------------------------------------------------------
 
@@ -534,7 +569,107 @@ def create_sos_event(
     return event_id
 
 
-def get_sos_events(user_id):
+def update_sos_event_status(sos_event_id, status):
+
+    connection = get_connection()
+
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        UPDATE sos_events
+        SET status = ?
+        WHERE id = ?
+    """, (
+        status,
+        sos_event_id
+    ))
+
+    connection.commit()
+
+    connection.close()
+
+
+def log_notification(
+    sos_event_id,
+    contact_id,
+    channel,
+    recipient,
+    status,
+    provider=None,
+    error_message=None
+):
+
+    connection = get_connection()
+
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        INSERT INTO notification_logs (
+            sos_event_id,
+            contact_id,
+            channel,
+            recipient,
+            status,
+            provider,
+            error_message
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (
+        sos_event_id,
+        contact_id,
+        channel,
+        recipient,
+        status,
+        provider,
+        error_message
+    ))
+
+    connection.commit()
+
+    log_id = cursor.lastrowid
+
+    connection.close()
+
+    return log_id
+
+
+def get_notification_logs(sos_event_id):
+
+    connection = get_connection()
+
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        SELECT
+            nl.id,
+            nl.sos_event_id,
+            nl.contact_id,
+            nl.channel,
+            nl.recipient,
+            nl.status,
+            nl.provider,
+            nl.error_message,
+            nl.created_at,
+            ec.name as contact_name
+        FROM notification_logs nl
+        LEFT JOIN emergency_contacts ec ON nl.contact_id = ec.id
+        WHERE nl.sos_event_id = ?
+        ORDER BY nl.id ASC
+    """, (
+        sos_event_id,
+    ))
+
+    logs = cursor.fetchall()
+
+    connection.close()
+
+    return [
+        dict(log)
+        for log in logs
+    ]
+
+
+def get_sos_events(user_id, include_notifications=True):
 
     connection = get_connection()
 
@@ -559,14 +694,36 @@ def get_sos_events(user_id):
         user_id,
     ))
 
-    events = cursor.fetchall()
+    events = [
+        dict(event)
+        for event in cursor.fetchall()
+    ]
+
+    if include_notifications:
+        for event in events:
+            cursor.execute("""
+                SELECT
+                    nl.id,
+                    nl.channel,
+                    nl.recipient,
+                    nl.status,
+                    nl.provider,
+                    nl.error_message,
+                    ec.name as contact_name
+                FROM notification_logs nl
+                LEFT JOIN emergency_contacts ec ON nl.contact_id = ec.id
+                WHERE nl.sos_event_id = ?
+                ORDER BY nl.id ASC
+            """, (event["id"],))
+
+            event["notifications"] = [
+                dict(log)
+                for log in cursor.fetchall()
+            ]
 
     connection.close()
 
-    return [
-        dict(event)
-        for event in events
-    ]
+    return events
 
 
 # ============================================================

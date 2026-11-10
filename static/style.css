@@ -850,6 +850,28 @@ button {
     margin-top: 3px;
 }
 
+.contact-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.test-contact-btn {
+    border: none;
+    background: #e0f2fe;
+    color: #0369a1;
+    padding: 7px 10px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.test-contact-btn:hover {
+    background: #bae6fd;
+}
+
 .delete-btn {
     border: none;
 

@@ -4,6 +4,9 @@ import sys
 # Ensure backend directory is in sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
+
 from flask import Flask, jsonify, render_template, request, session
 from flask_cors import CORS
 
@@ -26,6 +29,7 @@ from database import (
     delete_contact,
     create_sos_event,
     get_sos_events,
+    get_notification_logs,
 )
 
 from notifications import notification_service
@@ -42,7 +46,10 @@ app = Flask(
     static_url_path="/static"
 )
 
-app.secret_key = "SOS_GUARDIAN_CHANGE_THIS_SECRET_KEY"
+app.secret_key = os.getenv(
+    "FLASK_SECRET_KEY",
+    "SOS_GUARDIAN_CHANGE_THIS_SECRET_KEY"
+)
 
 CORS(app)
 
@@ -794,6 +801,84 @@ def remove_contact(
 
 
 # ============================================================
+# TEST CONTACT NOTIFICATION
+# ============================================================
+
+@app.route(
+    "/api/contacts/<int:contact_id>/test",
+    methods=["POST"]
+)
+@login_required
+def test_contact_notification(
+    contact_id
+):
+
+    try:
+
+        contacts = get_contacts(
+            session["user_id"]
+        )
+
+        contact = next(
+            (c for c in contacts if c["id"] == contact_id),
+            None
+        )
+
+        if not contact:
+
+            return jsonify({
+
+                "success": False,
+
+                "message":
+                    "Contact not found"
+
+            }), 404
+
+        user = get_user_by_id(
+            session["user_id"]
+        )
+
+        user_name = (
+            user["name"]
+            if user
+            else "You"
+        )
+
+        results = notification_service.send_test_notification(
+            contact,
+            user_name
+        )
+
+        return jsonify({
+
+            "success": True,
+
+            "message":
+                f"Test notification dispatched to {contact['name']}",
+
+            "results":
+                results
+
+        }), 200
+
+    except Exception as error:
+
+        print(
+            f"Test contact error: {error}"
+        )
+
+        return jsonify({
+
+            "success": False,
+
+            "message":
+                "Failed to send test alert"
+
+        }), 500
+
+
+# ============================================================
 # SOS
 # ============================================================
 
@@ -907,101 +992,30 @@ def sos():
 
 
         # ----------------------------------------------------
-        # SMS MESSAGE
+        # MULTI-CHANNEL EMERGENCY NOTIFICATIONS
         # ----------------------------------------------------
 
-        message = (
+        user = get_user_by_id(session["user_id"])
+        user_name = user["name"] if user else "SOS Guardian User"
 
-            "🚨 SOS EMERGENCY ALERT!\n\n"
-
-            f"An emergency SOS has been activated via {trigger_type}.\n\n"
-
-            f"{location_text}\n\n"
-
-            "Please check on the person immediately."
+        delivery_report = notification_service.send_emergency_alerts(
+            sos_event_id=event_id,
+            user_name=user_name,
+            trigger_type=trigger_type,
+            latitude=latitude,
+            longitude=longitude,
+            maps_url=maps_url,
+            contacts=contacts
         )
 
-
-        notification_results = []
-
-
-        # ----------------------------------------------------
-        # SEND NOTIFICATIONS
-        # ----------------------------------------------------
-
-        for contact in contacts:
-
-            try:
-
-                result = (
-                    notification_service.send_sms(
-
-                        contact["phone"],
-
-                        message
-                    )
-                )
-
-
-                notification_results.append({
-
-                    "contact_id":
-                        contact["id"],
-
-                    "name":
-                        contact["name"],
-
-                    "phone":
-                        contact["phone"],
-
-                    "success":
-                        result.get(
-                            "success",
-                            False
-                        )
-                })
-
-
-            except Exception as notification_error:
-
-                print(
-                    "Notification error:",
-                    notification_error
-                )
-
-
-                notification_results.append({
-
-                    "contact_id":
-                        contact["id"],
-
-                    "name":
-                        contact["name"],
-
-                    "phone":
-                        contact["phone"],
-
-                    "success":
-                        False
-                })
-
-
-        # ----------------------------------------------------
-        # UPDATE STATUS
-        # ----------------------------------------------------
-
-        if contacts:
-
-            status = "notification_sent"
-
-        else:
-
-            status = "no_contacts"
+        status = delivery_report.get("overall_status", "notification_sent")
 
 
         # ----------------------------------------------------
         # SERVER LOG
         # ----------------------------------------------------
+
+        summary = delivery_report.get("summary", {})
 
         print()
 
@@ -1039,6 +1053,14 @@ def sos():
 
         print(
             f"📊 Status   : {status}"
+        )
+
+        print(
+            f"📱 SMS      : sent={summary.get('sms_sent', 0)}, sim={summary.get('sms_simulated', 0)}, fail={summary.get('sms_failed', 0)}"
+        )
+
+        print(
+            f"✈️ Telegram : sent={summary.get('telegram_sent', 0)}, sim={summary.get('telegram_simulated', 0)}, fail={summary.get('telegram_failed', 0)}"
         )
 
         print("=" * 50)
@@ -1082,8 +1104,14 @@ def sos():
                 "total_contacts":
                     len(contacts),
 
+                "overall_status":
+                    status,
+
+                "summary":
+                    summary,
+
                 "results":
-                    notification_results
+                    delivery_report.get("dispatches", [])
             }
 
         }), 200

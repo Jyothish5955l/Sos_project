@@ -2292,12 +2292,25 @@ async function loadContacts() {
                         </div>
 
 
-                        <button
-                            class="delete-btn"
-                            onclick="deleteContact(${contact.id})"
-                        >
-                            Delete
-                        </button>
+                        <div class="contact-actions">
+
+                            <button
+                                class="test-contact-btn"
+                                type="button"
+                                onclick="testContactNotification(${contact.id}, '${escapeHtml(contact.name)}')"
+                                title="Send a test notification to verify delivery"
+                            >
+                                🧪 Test
+                            </button>
+
+                            <button
+                                class="delete-btn"
+                                onclick="deleteContact(${contact.id})"
+                            >
+                                Delete
+                            </button>
+
+                        </div>
 
                     </div>
 
@@ -2482,6 +2495,85 @@ window.deleteContact =
     deleteContact;
 
 
+async function testContactNotification(
+    contactId,
+    contactName
+) {
+
+    try {
+
+        const response =
+            await fetch(
+                `/api/contacts/${contactId}/test`,
+                {
+                    method:
+                        "POST"
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if (response.ok) {
+
+            let msg =
+                `🧪 Test Notification Dispatched to ${contactName}!\n\n`;
+
+            if (data.results?.sms) {
+
+                const s = data.results.sms;
+
+                msg +=
+                    `📱 SMS (${s.provider || "mock"}): ${s.status || (s.success ? "sent" : "failed")}\n`;
+
+                if (s.note) {
+                    msg += `   ℹ️ ${s.note}\n`;
+                }
+            }
+
+            if (data.results?.telegram) {
+
+                const t = data.results.telegram;
+
+                msg +=
+                    `✈️ Telegram: ${t.status || (t.success ? "sent" : "failed")}\n`;
+
+                if (t.note) {
+                    msg += `   ℹ️ ${t.note}\n`;
+                }
+
+                if (t.error) {
+                    msg += `   ⚠️ ${t.error}\n`;
+                }
+            }
+
+            alert(msg);
+
+        } else {
+
+            alert(
+                data.message ||
+                "Could not send test notification."
+            );
+        }
+
+    } catch (error) {
+
+        console.error(
+            "Test contact error:",
+            error
+        );
+
+        alert(
+            "Failed to connect to server for test notification."
+        );
+    }
+}
+
+window.testContactNotification =
+    testContactNotification;
+
+
 /* ============================================================
    SOS HISTORY
    ============================================================ */
@@ -2543,6 +2635,31 @@ async function loadHistory() {
                             )
                             .toLocaleString();
 
+                        const locationText =
+                            (event.latitude !== null && event.longitude !== null)
+                                ? `${event.latitude}, ${event.longitude}`
+                                : "Unavailable (No GPS)";
+
+                        const locationLink =
+                            event.maps_url
+                                ? `<a href="${escapeHtml(event.maps_url)}" target="_blank">📍 Open Location</a>`
+                                : `<span style="color:#94a3b8; font-size:12px;">📍 Location Unavailable</span>`;
+
+                        const notifHtml =
+                            (event.notifications && event.notifications.length > 0)
+                                ? `<div style="margin-top: 8px; display:flex; flex-wrap:wrap; gap:6px;">
+                                    ${event.notifications.map(n => {
+                                        const icon = n.channel === "telegram" ? "✈️" : "📱";
+                                        const isSent = n.status === "sent";
+                                        const isSim = n.status === "simulated";
+                                        const color = isSent ? "#15803d" : (isSim ? "#1d4ed8" : "#b91c1c");
+                                        const bg = isSent ? "#dcfce7" : (isSim ? "#dbeafe" : "#fee2e2");
+                                        return `<span style="display:inline-flex; align-items:center; gap:4px; padding:3px 7px; border-radius:6px; background:${bg}; color:${color}; font-size:11px; font-weight:700;">
+                                            ${icon} ${escapeHtml(n.channel)}: ${escapeHtml(n.status)}
+                                        </span>`;
+                                    }).join("")}
+                                   </div>`
+                                : "";
 
                         return `
 
@@ -2565,19 +2682,20 @@ async function loadHistory() {
                                 <br>
 
                                 Status:
-                                ${escapeHtml(
+                                <strong>${escapeHtml(
                                     event.status
-                                )}
+                                )}</strong>
 
                                 <br>
 
                                 Location:
-                                ${event.latitude},
-                                ${event.longitude}
+                                ${locationText}
 
                                 <br>
 
                                 ${date}
+
+                                ${notifHtml}
 
                             </div>
 
@@ -2585,12 +2703,7 @@ async function loadHistory() {
                             <br>
 
 
-                            <a
-                                href="${event.maps_url}"
-                                target="_blank"
-                            >
-                                📍 Open Location
-                            </a>
+                            ${locationLink}
 
                         </div>
 

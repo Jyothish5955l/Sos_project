@@ -1,5 +1,5 @@
 ---
-updated: 2026-11-10T09:55:00+05:30
+updated: 2026-11-10T10:05:00+05:30
 ---
 
 # Project State — SOS Guardian
@@ -7,45 +7,51 @@ updated: 2026-11-10T09:55:00+05:30
 ## Current Position
 
 **Milestone:** Core Delivery 1.0.0  
-**Phase:** Phase 3 — Voice SOS Engine  
-**Status:** Completed (Awaiting Phase 3 Approval to proceed to Phase 4)  
-**Plan:** Voice SOS Engine Implemented, Integrated with Countdown Timer, and Empirically Validated  
+**Phase:** Phase 4 — Emergency Notification Delivery  
+**Status:** Completed (Awaiting Phase 4 Approval to proceed to Phase 5)  
+**Plan:** Production Telegram Bot API Dispatcher, Modular SMS Abstraction, and Multichannel Delivery Tracking Implemented & Tested  
 
 ---
 
 ## Last Action Completed
 
-1. Built dedicated Voice SOS dashboard interface in `templates/index.html`:
-   - Added `#voiceStatus` badge with active, listening, and paused states.
-   - Added `#toggleVoiceButton` for pause/resume controls.
-   - Added live `#voiceTranscript` container displaying real-time transcribed audio.
-   - Displayed configured emergency phrase tags ("SOS", "Help me", "Emergency").
-2. Styled voice components in `static/style.css` matching responsive dark-mode theme.
-3. Implemented robust Web Speech API engine in `static/app.js`:
-   - Dual vendor support (`window.SpeechRecognition || window.webkitSpeechRecognition`).
-   - Word-boundary regex matching (`/\b(sos|help\s+me|i\s+need\s+help|please\s+help|emergency|save\s+me|call\s+for\s+help|sos\s+guardian)\b/i`) to mitigate false positives from substring inclusions ("associated", "asbestos", "season", "espresso", "emerging").
-   - Integrated with 5-second countdown engine with 15-second post-activation cooldown.
-   - Resilient continuous listening with 600ms auto-reconnect debounce across normal browser silence intervals.
-   - Clean error classification (`not-allowed`, `no-speech`, `network`).
-   - Pause/resume toggle control (`toggleVoiceSOS`).
-4. Created and executed automated unit test suite `tests/test_voice_matching.js`:
-   - 14/14 positive emergency detection test cases passed.
-   - 13/13 negative false-positive guard test cases passed (total 27/27 passed).
-5. Verified system integrity:
-   - `node --check static/app.js` (clean syntax, 0 errors).
-   - `.\.venv\Scripts\python.exe tests/test_phase2_backend.py` (7/7 backend tests passed).
-   - `node tests/test_gesture_math.js` (4/4 gesture tests passed).
+1. Built dedicated Telegram Bot API provider (`backend/providers/telegram_provider.py`):
+   - HTML-formatted emergency alerts with Google Maps hyperlinks and coordinate telemetry.
+   - Robust error handling for Telegram Bot API error codes (400 "chat not found", 401 "invalid token", 429 "rate limit").
+   - Explicit mock/simulation mode when `TELEGRAM_BOT_TOKEN` is unset, outputting clean formatted alerts to the console without crashing.
+2. Built provider-independent modular SMS abstraction (`backend/providers/sms_provider.py`):
+   - Defined `BaseSMSProvider` interface.
+   - Implemented `MockSMSProvider` for test/development environments with explicit `"simulated"` status.
+   - Implemented `TwilioSMSProvider` with HTTP Basic Auth and carrier dispatch.
+   - Implemented `Fast2SMSProvider` with bulk SMS API support.
+   - Added `get_sms_provider()` factory resolving active provider dynamically from environment variables.
+3. Updated SQLite database schema in `backend/database.py`:
+   - Created `notification_logs` table tracking per-contact, per-channel delivery attempts (`status`, `provider`, `error_message`, timestamps).
+   - Added audit functions: `log_notification()`, `get_notification_logs()`, and `update_sos_event_status()`.
+   - Enhanced `get_sos_events()` to include full delivery audit breakdown per event.
+4. Refactored central notification orchestrator (`backend/notifications.py`):
+   - Dispatches emergency alerts across both SMS and Telegram per contact.
+   - Computes aggregate event delivery status (`notification_sent`, `simulated`, `delivery_failed`, `no_contacts`).
+   - Implemented `send_test_notification()` for instant verification of emergency contacts from dashboard.
+5. Integrated endpoints & UI:
+   - Added `POST /api/contacts/<int:contact_id>/test` for on-demand verification alerts.
+   - Added `🧪 Test` button to dashboard contact cards in `templates/index.html`, `static/app.js`, and `static/style.css`.
+   - Updated history card view in `static/app.js` to render channel delivery badges (`✈️ telegram: sent`, `📱 sms: simulated`).
+   - Created `.env.example` template with full configuration documentation.
+6. Automated testing & validation:
+   - Authored `tests/test_notifications.py`: 11/11 tests passing.
+   - Verified zero regression: 49/49 total automated tests across all suites passing.
 
 ---
 
 ## Next Steps
 
-1. Await explicit user approval command: `APPROVE PHASE 3`.
-2. Upon approval, begin **Phase 4: Emergency Notification Delivery**:
-   - Implement production-ready Telegram Bot API dispatcher with markdown-formatted emergency alerts.
-   - Create modular SMS dispatcher with Twilio / Fast2SMS fallback interfaces.
-   - Add delivery tracking and retry logic in `backend/notifications.py`.
-   - Update contact management UI to test notification endpoints.
+1. Await explicit user approval command: `APPROVE PHASE 4`.
+2. Upon approval, begin **Phase 5: Security Hardening & UI/UX Polish**:
+   - Enforce CSRF protection and secure session hygiene.
+   - Implement route-level rate limiting on auth and emergency endpoints.
+   - Mobile-first responsiveness pass and accessibility audit.
+   - Refine visual indicators and active protection status.
 
 ---
 
@@ -58,17 +64,17 @@ updated: 2026-11-10T09:55:00+05:30
 | Geolocation Degradation | SOS alert dispatch is completely decoupled from GPS availability | 2026-11-10 | Phase 2, Phase 4 |
 | Palm Detection Debounce | 350ms temporal grace period to avoid frame jitter resets during 2.0s hold | 2026-11-10 | Phase 2 |
 | Voice Pattern Matching | Word-boundary regex (`\b...\b`) to eliminate substring false positives | 2026-11-10 | Phase 3 |
-| Voice Reconnect Debounce | 600ms auto-restart on speech recognition `onend` while session is active | 2026-11-10 | Phase 3 |
+| Notification Architecture | Provider-independent abstraction with dedicated `notification_logs` table | 2026-11-10 | Phase 4 |
+| Simulated Mode Transparency | Mock provider explicitly returns `status: "simulated"` per PRD mandate | 2026-11-10 | Phase 4 |
 
 ---
 
 ## Blockers
 
-*None. Phase 3 completed with 100% test pass rate.*
+*None. Phase 4 completed with 100% test pass rate.*
 
 ---
 
 ## Concerns / Notes to Monitor
 
-- Web Speech API requires network connectivity in Chrome/Edge (Google speech server backend).
-- In offline environments or non-Chromium browsers (Firefox), user is informed via status badge without breaking other SOS modalities.
+- Recipients on Telegram must initiate conversation with the bot (`/start`) before the bot can message them (Telegram Bot API privacy constraint).
