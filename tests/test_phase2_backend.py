@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch, MagicMock
 import sys
 import os
 
@@ -16,6 +17,16 @@ class TestPhase2Backend(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         initialize_database()
+        cls.patcher = patch("urllib.request.urlopen")
+        cls.mock_urlopen = cls.patcher.start()
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b'{"ok": true, "result": {"message_id": 1}}'
+        mock_resp.__enter__.return_value = mock_resp
+        cls.mock_urlopen.return_value = mock_resp
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.patcher.stop()
 
     def setUp(self):
         rate_limiter.clear_all()
@@ -30,6 +41,13 @@ class TestPhase2Backend(unittest.TestCase):
             )
         else:
             self.user_id = user["id"]
+
+        # Clean old contacts from previous test runs to prevent accumulation
+        conn = get_connection()
+        conn.execute("DELETE FROM notification_logs WHERE contact_id IN (SELECT id FROM emergency_contacts WHERE user_id = ?)", (self.user_id,))
+        conn.execute("DELETE FROM emergency_contacts WHERE user_id = ?", (self.user_id,))
+        conn.commit()
+        conn.close()
 
     def test_01_health_endpoint(self):
         res = self.client.get('/api/health')

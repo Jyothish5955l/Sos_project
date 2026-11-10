@@ -59,18 +59,13 @@ class TwilioSMSProvider(BaseSMSProvider):
 
     def __init__(self, account_sid=None, auth_token=None, from_number=None):
         self.account_sid = (
-            account_sid or
-            os.getenv("TWILIO_ACCOUNT_SID", "")
+            account_sid if account_sid is not None else os.getenv("TWILIO_ACCOUNT_SID", "")
         ).strip()
-
         self.auth_token = (
-            auth_token or
-            os.getenv("TWILIO_AUTH_TOKEN", "")
+            auth_token if auth_token is not None else os.getenv("TWILIO_AUTH_TOKEN", "")
         ).strip()
-
         self.from_number = (
-            from_number or
-            os.getenv("TWILIO_FROM_NUMBER", "")
+            from_number if from_number is not None else os.getenv("TWILIO_FROM_NUMBER", "")
         ).strip()
 
     def is_configured(self):
@@ -177,8 +172,7 @@ class Fast2SMSProvider(BaseSMSProvider):
 
     def __init__(self, api_key=None):
         self.api_key = (
-            api_key or
-            os.getenv("FAST2SMS_API_KEY", "")
+            api_key if api_key is not None else os.getenv("FAST2SMS_API_KEY", "")
         ).strip()
 
     def is_configured(self):
@@ -311,6 +305,137 @@ class Fast2SMSProvider(BaseSMSProvider):
             }
 
 
+class HttpSMSProvider(BaseSMSProvider):
+    """
+    httpSMS provider for cellular text message dispatch via an Android phone gateway.
+    API: https://api.httpsms.com/v1/messages/send
+    Configured via HTTPSMS_API_KEY and HTTPSMS_FROM_NUMBER.
+    """
+
+    name = "httpsms"
+
+    def __init__(self, api_key=None, from_number=None):
+        self.api_key = (
+            api_key if api_key is not None else os.getenv("HTTPSMS_API_KEY", "")
+        ).strip()
+        self.from_number = (
+            from_number if from_number is not None else os.getenv("HTTPSMS_FROM_NUMBER", "")
+        ).strip()
+
+    def is_configured(self):
+        return bool(
+            self.api_key and
+            self.from_number and
+            not self.api_key.startswith("YOUR_") and
+            not self.from_number.startswith("YOUR_")
+        )
+
+    @staticmethod
+    def format_e164(phone: str, default_country_code: str = "+91") -> str:
+        """
+        Format destination phone number to standard E.164.
+        Ensures destination phone numbers are formatted in standard E.164
+        (e.g., adding +91 prefix for 10-digit Indian numbers if missing).
+        """
+        raw = str(phone or "").strip()
+        if raw.startswith("+"):
+            digits_only = "".join(ch for ch in raw if ch.isdigit())
+            return f"+{digits_only}"
+
+        digits = "".join(ch for ch in raw if ch.isdigit())
+        if len(digits) == 10:
+            return f"{default_country_code}{digits}"
+        elif len(digits) == 11 and digits.startswith("0"):
+            return f"{default_country_code}{digits[1:]}"
+        elif len(digits) == 12 and digits.startswith("91"):
+            return f"+{digits}"
+        elif len(digits) > 7:
+            return f"+{digits}"
+        return raw
+
+    def send_sms(self, phone: str, message: str) -> dict:
+        phone_str = str(phone).strip()
+        to_number = self.format_e164(phone_str)
+        from_number = self.format_e164(self.from_number)
+
+        if not self.is_configured():
+            return {
+                "success": False,
+                "provider": "httpsms",
+                "status": "failed",
+                "phone": to_number,
+                "error": "httpSMS credentials unconfigured (set HTTPSMS_API_KEY and HTTPSMS_FROM_NUMBER in .env)"
+            }
+
+        url = "https://api.httpsms.com/v1/messages/send"
+        payload = {
+            "content": message,
+            "from": from_number,
+            "to": to_number
+        }
+        data_bytes = json.dumps(payload).encode("utf-8")
+
+        req = urllib.request.Request(
+            url,
+            data=data_bytes,
+            headers={
+                "x-api-key": self.api_key,
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "User-Agent": "SOS-Guardian-HttpSMS/1.0"
+            }
+        )
+
+        try:
+            with urllib.request.urlopen(req, timeout=12) as response:
+                resp_text = response.read().decode("utf-8")
+                result = json.loads(resp_text) if resp_text else {}
+                msg_id = result.get("id") or (result.get("data", {}).get("id") if isinstance(result.get("data"), dict) else None)
+                print(f"📱 httpSMS alert dispatched to {to_number} (ID: {msg_id})")
+                return {
+                    "success": True,
+                    "provider": "httpsms",
+                    "status": "sent",
+                    "phone": to_number,
+                    "message_id": msg_id,
+                    "response": result
+                }
+        except urllib.error.HTTPError as error:
+            error_body = error.read().decode("utf-8", errors="ignore")
+            try:
+                parsed = json.loads(error_body)
+                err_msg = parsed.get("message") or parsed.get("error") or str(error)
+            except Exception:
+                err_msg = f"HTTP {error.code}: {error.reason}"
+            print(f"⚠️ httpSMS HTTP Error ({error.code}): {err_msg}")
+            return {
+                "success": False,
+                "provider": "httpsms",
+                "status": "failed",
+                "phone": to_number,
+                "error": err_msg,
+                "http_code": error.code
+            }
+        except urllib.error.URLError as error:
+            print(f"⚠️ httpSMS URLError: {error.reason}")
+            return {
+                "success": False,
+                "provider": "httpsms",
+                "status": "failed",
+                "phone": to_number,
+                "error": f"Network error: {error.reason}"
+            }
+        except Exception as error:
+            print(f"⚠️ httpSMS Exception: {error}")
+            return {
+                "success": False,
+                "provider": "httpsms",
+                "status": "failed",
+                "phone": to_number,
+                "error": str(error)
+            }
+
+
 def get_sms_provider(provider_name=None) -> BaseSMSProvider:
     """
     Factory function resolving active SMS provider from environment or argument.
@@ -333,6 +458,13 @@ def get_sms_provider(provider_name=None) -> BaseSMSProvider:
         if provider.is_configured():
             return provider
         print("⚠️ Fast2SMS selected as SMS_PROVIDER but API key missing. Falling back to mock.")
+        return MockSMSProvider()
+
+    elif selected == "httpsms":
+        provider = HttpSMSProvider()
+        if provider.is_configured():
+            return provider
+        print("⚠️ httpSMS selected as SMS_PROVIDER but credentials missing. Falling back to mock.")
         return MockSMSProvider()
 
     return MockSMSProvider()

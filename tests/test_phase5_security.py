@@ -7,6 +7,7 @@ input validation, cross-user data isolation, and route authorization.
 import os
 import sys
 import unittest
+from unittest.mock import patch, MagicMock
 import json
 
 # Bootstrap sys.path for backend imports
@@ -31,6 +32,13 @@ class TestPhase5Security(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         initialize_database()
+        cls.patcher = patch("urllib.request.urlopen")
+        cls.mock_urlopen = cls.patcher.start()
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b'{"ok": true, "result": {"message_id": 1}}'
+        mock_resp.__enter__.return_value = mock_resp
+        cls.mock_urlopen.return_value = mock_resp
+
         cls.client = app.test_client()
         app.config["TESTING"] = True
 
@@ -60,6 +68,10 @@ class TestPhase5Security(unittest.TestCase):
             "+15551112222",
             telegram_chat_id="@user_a_contact"
         )
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.patcher.stop()
 
     def setUp(self):
         # Clear rate limits before individual tests to ensure isolation

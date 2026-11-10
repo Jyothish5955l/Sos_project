@@ -17,10 +17,10 @@ class TelegramProvider:
     """
 
     def __init__(self, token=None):
-        self.token = (
-            token or
-            os.getenv("TELEGRAM_BOT_TOKEN", "")
-        ).strip()
+        if token is not None:
+            self.token = str(token).strip()
+        else:
+            self.token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 
     def is_configured(self):
         """Returns True if a non-placeholder bot token is present."""

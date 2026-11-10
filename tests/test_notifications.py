@@ -33,11 +33,12 @@ from providers.sms_provider import (
     MockSMSProvider,
     TwilioSMSProvider,
     Fast2SMSProvider,
+    HttpSMSProvider,
     get_sms_provider,
     format_emergency_sms,
     format_test_sms
 )
-from notifications import NotificationService, notification_service
+from notifications import NotificationService, notification_service, send_httpsms_alert
 from rate_limiter import rate_limiter
 
 
@@ -252,6 +253,112 @@ class TestNotificationDelivery(unittest.TestCase):
         )
         self.assertIn("GPS Unavailable", sms_no_coords)
         self.assertNotIn("https://www.google.com/maps", sms_no_coords)
+
+    def test_07e_httpsms_format_e164(self):
+        """HttpSMSProvider.format_e164 should normalize numbers to standard E.164 (+91 for Indian numbers)."""
+        self.assertEqual(HttpSMSProvider.format_e164("9876543210"), "+919876543210")
+        self.assertEqual(HttpSMSProvider.format_e164("09876543210"), "+919876543210")
+        self.assertEqual(HttpSMSProvider.format_e164("919876543210"), "+919876543210")
+        self.assertEqual(HttpSMSProvider.format_e164("+91 98765-43210"), "+919876543210")
+        self.assertEqual(HttpSMSProvider.format_e164("+15551234567"), "+15551234567")
+
+    def test_07f_httpsms_unconfigured_fallback(self):
+        """send_httpsms_alert should safely fallback to mock simulation when credentials are missing."""
+        with patch.dict(os.environ, {"HTTPSMS_API_KEY": "", "HTTPSMS_FROM_NUMBER": ""}):
+            res = send_httpsms_alert("9876543210", "🚨 Distress Test Alert")
+            self.assertTrue(res["success"])
+            self.assertEqual(res["status"], "simulated")
+            self.assertEqual(res["provider"], "mock")
+            self.assertEqual(res["phone"], "+919876543210")
+
+    @patch("urllib.request.urlopen")
+    def test_07g_httpsms_live_dispatch_success(self, mock_urlopen):
+        """send_httpsms_alert should dispatch POST to httpSMS API with headers and E.164 payload."""
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps({
+            "status": "success",
+            "data": {
+                "id": "msg_httpsms_12345",
+                "content": "🚨 SOS EMERGENCY ALERT!",
+                "from": "+918888888888",
+                "to": "+919876543210"
+            }
+        }).encode("utf-8")
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
+
+        with patch.dict(os.environ, {
+            "SMS_PROVIDER": "httpsms",
+            "HTTPSMS_API_KEY": "test_httpsms_api_key_secret",
+            "HTTPSMS_FROM_NUMBER": "+918888888888"
+        }):
+            res = send_httpsms_alert("9876543210", "🚨 SOS EMERGENCY ALERT!")
+            self.assertTrue(res["success"])
+            self.assertEqual(res["status"], "sent")
+            self.assertEqual(res["provider"], "httpsms")
+            self.assertEqual(res["phone"], "+919876543210")
+            self.assertEqual(res["message_id"], "msg_httpsms_12345")
+
+            # Verify request
+            self.assertEqual(mock_urlopen.call_count, 1)
+            req_sent = mock_urlopen.call_args[0][0]
+            self.assertEqual(req_sent.full_url, "https://api.httpsms.com/v1/messages/send")
+            self.assertEqual(req_sent.headers.get("X-api-key"), "test_httpsms_api_key_secret")
+            self.assertEqual(req_sent.headers.get("Content-type"), "application/json")
+            self.assertEqual(req_sent.headers.get("Accept"), "application/json")
+
+            sent_payload = json.loads(req_sent.data.decode("utf-8"))
+            self.assertEqual(sent_payload.get("to"), "+919876543210")
+            self.assertEqual(sent_payload.get("from"), "+918888888888")
+            self.assertEqual(sent_payload.get("content"), "🚨 SOS EMERGENCY ALERT!")
+
+    @patch("urllib.request.urlopen")
+    def test_07h_httpsms_http_error_graceful_handling(self, mock_urlopen):
+        """send_httpsms_alert should handle HTTPError gracefully without throwing exceptions."""
+        error_body = json.dumps({
+            "message": "Invalid API Key or unauthorized phone number"
+        }).encode("utf-8")
+
+        mock_http_error = urllib.error.HTTPError(
+            url="https://api.httpsms.com/v1/messages/send",
+            code=401,
+            msg="Unauthorized",
+            hdrs={},
+            fp=MagicMock(read=MagicMock(return_value=error_body))
+        )
+        mock_urlopen.side_effect = mock_http_error
+
+        with patch.dict(os.environ, {
+            "SMS_PROVIDER": "httpsms",
+            "HTTPSMS_API_KEY": "bad_key",
+            "HTTPSMS_FROM_NUMBER": "+918888888888"
+        }):
+            res = send_httpsms_alert("9876543210", "🚨 Alert")
+            self.assertFalse(res["success"])
+            self.assertEqual(res["status"], "failed")
+            self.assertEqual(res["provider"], "httpsms")
+            self.assertIn("Invalid API Key", res["error"])
+            self.assertEqual(res["http_code"], 401)
+
+    @patch("urllib.request.urlopen")
+    def test_07i_httpsms_multiple_phone_numbers(self, mock_urlopen):
+        """send_httpsms_alert should accept list of phone numbers and return list of dispatch results."""
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps({"id": "msg_batch_1"}).encode("utf-8")
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
+
+        with patch.dict(os.environ, {
+            "SMS_PROVIDER": "httpsms",
+            "HTTPSMS_API_KEY": "test_key",
+            "HTTPSMS_FROM_NUMBER": "+918888888888"
+        }):
+            results = send_httpsms_alert(["9876543210", "9876543211"], "🚨 Batch Alert")
+            self.assertIsInstance(results, list)
+            self.assertEqual(len(results), 2)
+            self.assertEqual(results[0]["phone"], "+919876543210")
+            self.assertEqual(results[1]["phone"], "+919876543211")
+            self.assertEqual(mock_urlopen.call_count, 2)
 
     def test_08_multichannel_emergency_alerts_orchestration(self):
         """NotificationService should dispatch to both SMS and Telegram and persist logs in SQLite."""

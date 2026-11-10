@@ -4,17 +4,51 @@ Orchestrates emergency distress dispatches across SMS, Telegram, and Push.
 Tracks per-channel delivery results and logs history in SQLite.
 """
 
+import os
 from providers.telegram_provider import telegram_provider, TelegramProvider
 from providers.sms_provider import (
     get_sms_provider,
     format_emergency_sms,
     format_test_sms,
     Fast2SMSProvider,
+    HttpSMSProvider,
     MockSMSProvider,
     TwilioSMSProvider
 )
 from providers.fcm_provider import fcm_provider
 from database import log_notification, update_sos_event_status, get_contacts as db_get_contacts
+
+
+def send_httpsms_alert(phone_numbers, message_text):
+    """
+    Dispatch cellular text messages directly to emergency contact phone numbers via httpSMS.
+    Calls https://api.httpsms.com/v1/messages/send
+    Headers: x-api-key: <HTTPSMS_API_KEY>, Content-Type: application/json, Accept: application/json.
+    Ensures destination phone numbers are formatted in standard E.164 (e.g. +91 for Indian numbers).
+    Safely falls back to mock simulation if credentials are unconfigured or missing.
+    Returns single result dict (if phone_numbers is str) or list of result dicts.
+    """
+    provider = HttpSMSProvider()
+    is_single = isinstance(phone_numbers, str)
+    numbers = [phone_numbers] if is_single else list(phone_numbers or [])
+
+    if not provider.is_configured():
+        fallback = MockSMSProvider()
+        results = []
+        for raw_phone in numbers:
+            phone_e164 = HttpSMSProvider.format_e164(str(raw_phone).strip())
+            sim_res = fallback.send_sms(phone_e164, message_text)
+            sim_res["fallback_reason"] = "httpSMS credentials missing; safely simulated via mock provider."
+            results.append(sim_res)
+        return results[0] if is_single and results else results
+
+    results = []
+    for raw_phone in numbers:
+        phone_e164 = HttpSMSProvider.format_e164(str(raw_phone).strip())
+        res = provider.send_sms(phone_e164, message_text)
+        results.append(res)
+
+    return results[0] if is_single and results else results
 
 
 def format_escalation_sms(user_name, escalation_level, maps_url=None, latitude=None, longitude=None):
@@ -137,7 +171,11 @@ class NotificationService:
             # ----------------------------------------------------
             if phone:
                 try:
-                    sms_result = self.sms.send_sms(phone, sms_body)
+                    active_provider = os.getenv("SMS_PROVIDER", "mock").strip().lower()
+                    if self._custom_sms is None and active_provider == "httpsms":
+                        sms_result = send_httpsms_alert(phone, sms_body)
+                    else:
+                        sms_result = self.sms.send_sms(phone, sms_body)
                     sms_status = sms_result.get("status", "sent" if sms_result.get("success") else "failed")
                     sms_provider_name = sms_result.get("provider", "mock")
                     error_msg = sms_result.get("error")
@@ -277,7 +315,11 @@ class NotificationService:
 
         if phone:
             test_sms = format_test_sms(user_name)
-            results["sms"] = self.sms.send_sms(phone, test_sms)
+            active_provider = os.getenv("SMS_PROVIDER", "mock").strip().lower()
+            if self._custom_sms is None and active_provider == "httpsms":
+                results["sms"] = send_httpsms_alert(phone, test_sms)
+            else:
+                results["sms"] = self.sms.send_sms(phone, test_sms)
 
         if telegram_chat_id:
             test_tg = TelegramProvider.format_test_message(user_name)
@@ -339,7 +381,11 @@ class NotificationService:
 
             if phone:
                 try:
-                    res = self.sms.send_sms(phone, sms_body)
+                    active_provider = os.getenv("SMS_PROVIDER", "mock").strip().lower()
+                    if self._custom_sms is None and active_provider == "httpsms":
+                        res = send_httpsms_alert(phone, sms_body)
+                    else:
+                        res = self.sms.send_sms(phone, sms_body)
                     st = res.get("status", "sent" if res.get("success") else "failed")
                     contact_dispatch["channels"]["sms"] = {"status": st, "provider": res.get("provider", "mock")}
                     if sos_event_id:
@@ -382,6 +428,9 @@ class NotificationService:
 
     def send_sms(self, phone, message):
         """Backward-compatible helper method."""
+        active_provider = os.getenv("SMS_PROVIDER", "mock").strip().lower()
+        if self._custom_sms is None and active_provider == "httpsms":
+            return send_httpsms_alert(phone, message)
         return self.sms.send_sms(phone, message)
 
 
