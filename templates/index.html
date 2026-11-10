@@ -161,7 +161,7 @@
             <div class="permission-info">
                 <strong>Microphone</strong>
                 <span>
-                    Reserved for future voice SOS.
+                    Used for hands-free voice SOS detection.
                 </span>
             </div>
 
@@ -331,6 +331,74 @@
         </section>
 
 
+        <!-- ================= VOICE SOS ================= -->
+
+        <section class="voice-panel">
+
+            <div class="section-heading">
+
+                <div>
+                    <h2>🎤 Voice SOS Guardian</h2>
+
+                    <p>
+                        Speak an emergency distress phrase to trigger hands-free SOS.
+                    </p>
+                </div>
+
+                <div class="voice-controls">
+
+                    <span
+                        id="voiceStatus"
+                        class="voice-status"
+                    >
+                        Starting voice listener...
+                    </span>
+
+                    <button
+                        id="toggleVoiceButton"
+                        class="toggle-voice-btn"
+                        type="button"
+                    >
+                        Pause Voice SOS
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <div class="voice-telemetry">
+
+                <div class="voice-transcript-wrapper">
+
+                    <span class="transcript-label">Live Speech Transcript:</span>
+
+                    <div
+                        id="voiceTranscript"
+                        class="voice-transcript"
+                    >
+                        Listening for voice input...
+                    </div>
+
+                </div>
+
+                <div class="voice-phrases">
+
+                    <strong>Configured Emergency Phrases:</strong>
+
+                    <div class="phrase-tags">
+                        <span class="phrase-tag">"SOS"</span>
+                        <span class="phrase-tag">"Help me"</span>
+                        <span class="phrase-tag">"Emergency"</span>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
         <!-- ================= MANUAL SOS ================= -->
 
         <section class="sos-panel">
@@ -353,7 +421,7 @@
             </button>
 
             <div class="trigger-info">
-                ✋ Hand Gesture &nbsp; • &nbsp; 🔴 Manual Button
+                ✋ Hand Gesture &nbsp; • &nbsp; 🔴 Manual Button &nbsp; • &nbsp; 🎤 Voice Commands
             </div>
 
         </section>

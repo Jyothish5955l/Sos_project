@@ -37,6 +37,8 @@ let gestureCooldownUntil = 0;
 let voiceRecognition = null;
 let voiceRunning = false;
 let voiceTriggered = false;
+let voiceEnabled = true;
+let voiceCooldownUntil = 0;
 
 
 /* ============================================================
@@ -72,6 +74,9 @@ const authSwitchText =
 
 const authSwitchButton =
     document.getElementById("authSwitchButton");
+
+const toggleVoiceButton =
+    document.getElementById("toggleVoiceButton");
 
 
 /* ============================================================
@@ -1560,6 +1565,16 @@ if (cancelSosButton) {
 
             voiceTriggered =
                 false;
+
+            voiceCooldownUntil =
+                0;
+
+            if (voiceEnabled && voiceRunning) {
+                updateVoiceStatus(
+                    "🎤 Listening for emergency words...",
+                    "listening"
+                );
+            }
         }
     );
 }
@@ -1614,6 +1629,9 @@ async function sendSosRequest(
 
             voiceTriggered =
                 false;
+
+            voiceCooldownUntil =
+                0;
 
             return;
         }
@@ -1695,6 +1713,9 @@ function triggerSOS(
 
         voiceTriggered =
             false;
+
+        voiceCooldownUntil =
+            Date.now() + 15000;
     }
 
     if (
@@ -1804,8 +1825,11 @@ function triggerSOS(
 
 
 /* ============================================================
-   VOICE SOS
+   VOICE SOS ENGINE
    ============================================================ */
+
+const EMERGENCY_VOICE_REGEX =
+    /\b(sos|help\s+me|i\s+need\s+help|please\s+help|emergency|save\s+me|call\s+for\s+help|sos\s+guardian)\b/i;
 
 function startVoiceSOS() {
 
@@ -1813,46 +1837,46 @@ function startVoiceSOS() {
         window.SpeechRecognition ||
         window.webkitSpeechRecognition;
 
-
     if (!SpeechRecognition) {
 
         console.warn(
             "Speech Recognition is not supported by this browser."
         );
 
-
         updateVoiceStatus(
-            "Voice SOS not supported in this browser."
+            "Voice SOS not supported in this browser.",
+            "error"
         );
 
+        updateVoiceTranscript(
+            "Web Speech Recognition API is unavailable in this browser."
+        );
+
+        if (toggleVoiceButton) {
+            toggleVoiceButton.disabled = true;
+            toggleVoiceButton.textContent = "Voice Unsupported";
+        }
 
         return;
     }
 
-
-    if (voiceRunning) {
-
+    if (!voiceEnabled || voiceRunning) {
         return;
     }
-
 
     try {
 
         voiceRecognition =
             new SpeechRecognition();
 
-
         voiceRecognition.continuous =
             true;
-
 
         voiceRecognition.interimResults =
             true;
 
-
         voiceRecognition.lang =
             "en-US";
-
 
         voiceRecognition.onstart =
             () => {
@@ -1860,83 +1884,89 @@ function startVoiceSOS() {
                 voiceRunning =
                     true;
 
-
                 console.log(
                     "🎤 Voice SOS listening..."
                 );
 
-
                 updateVoiceStatus(
-                    "🎤 Listening for emergency words..."
+                    "🎤 Listening for emergency words...",
+                    "listening"
                 );
             };
-
 
         voiceRecognition.onresult =
             event => {
 
-                let transcript =
-                    "";
-
+                let interimTranscript = "";
+                let finalTranscript = "";
 
                 for (
-                    let i =
-                        event.resultIndex;
-
-                    i <
-                    event.results.length;
-
+                    let i = event.resultIndex;
+                    i < event.results.length;
                     i++
                 ) {
-
-                    transcript +=
-                        event.results[i][0]
-                            .transcript;
+                    const text = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += text + " ";
+                    } else {
+                        interimTranscript += text + " ";
+                    }
                 }
 
+                const fullTranscript =
+                    (finalTranscript + interimTranscript).trim();
 
-                transcript =
-                    transcript
-                        .toLowerCase()
-                        .trim();
-
-
-                console.log(
-                    "🎤 Heard:",
-                    transcript
-                );
-
-
-                checkEmergencyVoice(
-                    transcript
-                );
+                if (fullTranscript) {
+                    updateVoiceTranscript(`"${fullTranscript}"`);
+                    checkEmergencyVoice(fullTranscript);
+                }
             };
-
 
         voiceRecognition.onerror =
             event => {
 
                 console.warn(
-                    "Voice recognition:",
+                    "Voice recognition error:",
                     event.error
                 );
 
-
-                voiceRunning =
-                    false;
-
-
                 if (
-                    event.error ===
-                    "not-allowed"
+                    event.error === "not-allowed" ||
+                    event.error === "service-not-allowed"
                 ) {
 
+                    voiceEnabled = false;
+                    voiceRunning = false;
+
                     updateVoiceStatus(
-                        "🎤 Microphone permission denied."
+                        "🎤 Microphone permission denied.",
+                        "error"
+                    );
+
+                    updateVoiceTranscript(
+                        "Microphone access blocked. Enable permissions to use Voice SOS."
+                    );
+
+                    if (toggleVoiceButton) {
+                        toggleVoiceButton.textContent = "Mic Blocked";
+                        toggleVoiceButton.disabled = true;
+                    }
+
+                    return;
+                }
+
+                if (event.error === "no-speech") {
+                    // Normal idle timeout in quiet environments; automatically restarts on onend
+                    return;
+                }
+
+                if (event.error === "network") {
+                    updateVoiceStatus(
+                        "Speech network connection issue — retrying...",
+                        "error"
                     );
                 }
             };
-
 
         voiceRecognition.onend =
             () => {
@@ -1944,40 +1974,33 @@ function startVoiceSOS() {
                 voiceRunning =
                     false;
 
-
                 /*
                    Automatically restart speech
-                   recognition if the user is still
-                   logged into the dashboard.
+                   recognition if voice is enabled and
+                   the user is still logged into the dashboard.
                 */
 
                 if (
+                    voiceEnabled &&
                     currentUser &&
                     dashboard &&
-                    !dashboard.classList.contains(
-                        "hidden"
-                    )
+                    !dashboard.classList.contains("hidden")
                 ) {
 
                     setTimeout(
                         () => {
 
-                            if (
-                                !voiceRunning
-                            ) {
-
+                            if (!voiceRunning && voiceEnabled) {
                                 startVoiceSOS();
                             }
 
                         },
-                        700
+                        600
                     );
                 }
             };
 
-
         voiceRecognition.start();
-
 
     } catch (error) {
 
@@ -1986,9 +2009,13 @@ function startVoiceSOS() {
             error
         );
 
-
         voiceRunning =
             false;
+
+        updateVoiceStatus(
+            "Voice SOS startup failed.",
+            "error"
+        );
     }
 }
 
@@ -2002,78 +2029,61 @@ function checkEmergencyVoice(
 ) {
 
     if (
+        !voiceEnabled ||
         voiceTriggered ||
-        countdownTimer
+        countdownTimer ||
+        Date.now() < voiceCooldownUntil
     ) {
-
         return;
     }
 
+    const match = transcript.match(EMERGENCY_VOICE_REGEX);
 
-    const emergencyPhrases = [
-
-        "sos",
-
-        "help me",
-
-        "i need help",
-
-        "please help",
-
-        "emergency",
-
-        "save me",
-
-        "call for help",
-
-        "sos guardian"
-    ];
-
-
-    const detected =
-        emergencyPhrases.some(
-            phrase =>
-                transcript.includes(
-                    phrase
-                )
-        );
-
-
-    if (!detected) {
-
+    if (!match) {
         return;
     }
 
+    const detectedPhrase = match[0].toUpperCase();
 
     console.log(
-        "🚨 EMERGENCY VOICE DETECTED:",
+        `🚨 EMERGENCY VOICE DETECTED [${detectedPhrase}]:`,
         transcript
     );
-
 
     voiceTriggered =
         true;
 
+    voiceCooldownUntil =
+        Date.now() + 15000;
 
     updateVoiceStatus(
-        "🚨 Emergency voice detected!"
+        `🚨 Emergency voice detected ("${detectedPhrase}")!`,
+        "active"
     );
 
+    updateVoiceTranscript(
+        `Trigger phrase matched: "${match[0]}" in "${transcript}"`
+    );
 
     startSosCountdown(
         "voice"
     );
 
-
     setTimeout(
         () => {
 
-            if (
-                !countdownTimer
-            ) {
+            if (!countdownTimer) {
 
                 voiceTriggered =
                     false;
+
+                if (voiceRunning && voiceEnabled) {
+
+                    updateVoiceStatus(
+                        "🎤 Listening for emergency words...",
+                        "listening"
+                    );
+                }
             }
 
         },
@@ -2083,24 +2093,97 @@ function checkEmergencyVoice(
 
 
 /* ============================================================
-   VOICE STATUS
+   VOICE TELEMETRY & CONTROLS
    ============================================================ */
 
 function updateVoiceStatus(
-    message
+    message,
+    statusClass = ""
 ) {
 
     const element =
-        document.getElementById(
-            "voiceStatus"
-        );
-
+        document.getElementById("voiceStatus");
 
     if (element) {
 
         element.textContent =
             message;
+
+        element.className =
+            "voice-status" + (statusClass ? ` ${statusClass}` : "");
     }
+}
+
+
+function updateVoiceTranscript(
+    text
+) {
+
+    const element =
+        document.getElementById("voiceTranscript");
+
+    if (element) {
+
+        element.textContent =
+            text;
+    }
+}
+
+
+function toggleVoiceSOS() {
+
+    voiceEnabled = !voiceEnabled;
+
+    const btn =
+        document.getElementById("toggleVoiceButton");
+
+    if (!voiceEnabled) {
+
+        stopVoiceSOS();
+
+        if (btn) {
+            btn.textContent = "Resume Voice SOS";
+            btn.classList.add("paused");
+        }
+
+        updateVoiceStatus(
+            "Voice SOS Paused",
+            "paused"
+        );
+
+        updateVoiceTranscript(
+            "Voice recognition paused by user."
+        );
+
+    } else {
+
+        if (btn) {
+            btn.textContent = "Pause Voice SOS";
+            btn.classList.remove("paused");
+        }
+
+        updateVoiceStatus(
+            "Starting voice listener...",
+            "listening"
+        );
+
+        updateVoiceTranscript(
+            "Listening for voice input..."
+        );
+
+        startVoiceSOS();
+    }
+}
+
+
+if (toggleVoiceButton) {
+
+    toggleVoiceButton.addEventListener(
+        "click",
+        () => {
+            toggleVoiceSOS();
+        }
+    );
 }
 
 
@@ -2110,9 +2193,7 @@ function updateVoiceStatus(
 
 function stopVoiceSOS() {
 
-    if (
-        voiceRecognition
-    ) {
+    if (voiceRecognition) {
 
         try {
 
@@ -2121,11 +2202,11 @@ function stopVoiceSOS() {
         } catch (error) {
 
             console.warn(
+                "Voice stop:",
                 error
             );
         }
     }
-
 
     voiceRunning =
         false;
@@ -2593,6 +2674,9 @@ if (logoutButton) {
 
             voiceTriggered =
                 false;
+
+            voiceCooldownUntil =
+                0;
 
 
             dashboard.classList.add(
