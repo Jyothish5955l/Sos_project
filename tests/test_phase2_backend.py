@@ -8,6 +8,7 @@ sys.path.insert(0, backend_dir)
 
 from app import app
 from database import get_connection, initialize_database, create_user, get_user_by_email
+from rate_limiter import rate_limiter
 
 
 class TestPhase2Backend(unittest.TestCase):
@@ -17,6 +18,7 @@ class TestPhase2Backend(unittest.TestCase):
         initialize_database()
 
     def setUp(self):
+        rate_limiter.clear_all()
         self.client = app.test_client()
         # Ensure a test user exists
         user = get_user_by_email("test_phase2@sosguardian.local")

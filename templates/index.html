@@ -262,6 +262,65 @@
         </div>
 
 
+        <!-- ================= SYSTEM READINESS MATRIX ================= -->
+
+        <section class="readiness-panel" aria-label="System Readiness Matrix">
+
+            <div class="readiness-header">
+
+                <div class="readiness-title-group">
+                    <span class="readiness-shield">🛡️</span>
+                    <div>
+                        <h2>System Readiness Matrix</h2>
+                        <p>Live health and sensor telemetry across all emergency modalities.</p>
+                    </div>
+                </div>
+
+                <div id="overallReadinessBadge" class="readiness-badge initializing">
+                    Initializing Sensors...
+                </div>
+
+            </div>
+
+            <div class="readiness-grid">
+
+                <div class="readiness-card">
+                    <div class="readiness-icon-wrap">✋</div>
+                    <div class="readiness-details">
+                        <span class="readiness-label">Gesture Guardian</span>
+                        <strong id="matrixGestureStatus" class="readiness-value waiting">Initializing...</strong>
+                    </div>
+                </div>
+
+                <div class="readiness-card">
+                    <div class="readiness-icon-wrap">🎤</div>
+                    <div class="readiness-details">
+                        <span class="readiness-label">Voice SOS Engine</span>
+                        <strong id="matrixVoiceStatus" class="readiness-value waiting">Initializing...</strong>
+                    </div>
+                </div>
+
+                <div class="readiness-card">
+                    <div class="readiness-icon-wrap">📍</div>
+                    <div class="readiness-details">
+                        <span class="readiness-label">GPS Geolocation</span>
+                        <strong id="matrixGpsStatus" class="readiness-value waiting">Checking Signal...</strong>
+                    </div>
+                </div>
+
+                <div class="readiness-card">
+                    <div class="readiness-icon-wrap">👥</div>
+                    <div class="readiness-details">
+                        <span class="readiness-label">Emergency Contacts</span>
+                        <strong id="matrixContactsStatus" class="readiness-value waiting">Checking...</strong>
+                    </div>
+                </div>
+
+            </div>
+
+        </section>
+
+
         <!-- ================= GESTURE ================= -->
 
         <section class="gesture-panel">
@@ -415,6 +474,7 @@
                 id="sosButton"
                 class="sos-button"
                 type="button"
+                aria-label="Activate Emergency SOS immediately"
             >
                 <span>SOS</span>
                 <small>EMERGENCY</small>
@@ -537,6 +597,7 @@
             id="cancelSosButton"
             class="cancel-btn"
             type="button"
+            aria-label="Cancel Emergency Countdown"
         >
             CANCEL
         </button>

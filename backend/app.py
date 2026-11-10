@@ -1,5 +1,7 @@
 import os
 import sys
+import re
+from datetime import timedelta
 
 # Ensure backend directory is in sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -33,10 +35,11 @@ from database import (
 )
 
 from notifications import notification_service
+from rate_limiter import rate_limiter
 
 
 # ============================================================
-# APPLICATION CONFIGURATION
+# APPLICATION CONFIGURATION & SECURITY HYGIENE
 # ============================================================
 
 app = Flask(
@@ -51,7 +54,46 @@ app.secret_key = os.getenv(
     "SOS_GUARDIAN_CHANGE_THIS_SECRET_KEY"
 )
 
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.getenv("FLASK_ENV") == "production",
+    PERMANENT_SESSION_LIFETIME=timedelta(days=7),
+    MAX_CONTENT_LENGTH=2 * 1024 * 1024  # 2MB payload protection
+)
+
 CORS(app)
+
+
+# ============================================================
+# SECURITY HEADERS MIDDLEWARE
+# ============================================================
+
+@app.after_request
+def add_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(self), microphone=(self), geolocation=(self)"
+    return response
+
+
+# ============================================================
+# RATE LIMITING HELPER
+# ============================================================
+
+def check_rate_limit(key: str, max_requests: int, window_seconds: int):
+    allowed, retry_after = rate_limiter.is_allowed(key, max_requests, window_seconds)
+    if not allowed:
+        response = jsonify({
+            "success": False,
+            "message": f"Rate limit exceeded. Please wait {retry_after} seconds before retrying.",
+            "retry_after": retry_after
+        })
+        response.headers["Retry-After"] = str(retry_after)
+        return response, 429
+    return None
 
 
 # ============================================================
@@ -140,63 +182,68 @@ def register():
 
     try:
 
-        data = request.get_json() or {}
+        client_ip = request.headers.get("X-Forwarded-For", request.remote_addr).split(",")[0].strip()
+        rate_resp = check_rate_limit(f"register:{client_ip}", max_requests=10, window_seconds=60)
+        if rate_resp:
+            return rate_resp
 
+        data = request.get_json() or {}
 
         name = data.get(
             "name",
             ""
         ).strip()
 
-
         email = data.get(
             "email",
             ""
         ).strip().lower()
-
 
         password = data.get(
             "password",
             ""
         )
 
-
         # ----------------------------------------------------
         # VALIDATION
         # ----------------------------------------------------
 
         if not name:
-
             return jsonify({
                 "success": False,
                 "message": "Name is required"
             }), 400
 
+        if len(name) < 2 or len(name) > 60:
+            return jsonify({
+                "success": False,
+                "message": "Name must be between 2 and 60 characters"
+            }), 400
 
         if not email:
-
             return jsonify({
                 "success": False,
                 "message": "Email is required"
             }), 400
 
-
-        if "@" not in email:
-
+        EMAIL_REGEX = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+        if not re.match(EMAIL_REGEX, email):
             return jsonify({
                 "success": False,
                 "message": "Enter a valid email address"
             }), 400
 
-
         if len(password) < 6:
-
             return jsonify({
                 "success": False,
-                "message":
-                    "Password must contain at least 6 characters"
+                "message": "Password must contain at least 6 characters"
             }), 400
 
+        if len(password) > 128:
+            return jsonify({
+                "success": False,
+                "message": "Password cannot exceed 128 characters"
+            }), 400
 
         # ----------------------------------------------------
         # CHECK EXISTING USER
@@ -206,15 +253,11 @@ def register():
             email
         )
 
-
         if existing_user:
-
             return jsonify({
                 "success": False,
-                "message":
-                    "An account with this email already exists"
+                "message": "An account with this email already exists"
             }), 409
-
 
         # ----------------------------------------------------
         # HASH PASSWORD
@@ -223,7 +266,6 @@ def register():
         password_hash = generate_password_hash(
             password
         )
-
 
         # ----------------------------------------------------
         # CREATE USER
@@ -235,12 +277,12 @@ def register():
             password_hash
         )
 
-
         # ----------------------------------------------------
         # CREATE SESSION
         # ----------------------------------------------------
 
         session["user_id"] = user_id
+        session.permanent = True
 
 
         return jsonify({
@@ -295,22 +337,26 @@ def login():
 
         data = request.get_json() or {}
 
-
         email = data.get(
             "email",
             ""
         ).strip().lower()
-
 
         password = data.get(
             "password",
             ""
         )
 
+        # ----------------------------------------------------
+        # RATE LIMITING & VALIDATION
+        # ----------------------------------------------------
 
-        # ----------------------------------------------------
-        # VALIDATION
-        # ----------------------------------------------------
+        client_ip = request.headers.get("X-Forwarded-For", request.remote_addr).split(",")[0].strip()
+        rate_key = f"login:{client_ip}:{email or 'unknown'}"
+
+        rate_resp = check_rate_limit(rate_key, max_requests=5, window_seconds=60)
+        if rate_resp:
+            return rate_resp
 
         if not email or not password:
 
@@ -323,7 +369,6 @@ def login():
 
             }), 400
 
-
         # ----------------------------------------------------
         # FIND USER
         # ----------------------------------------------------
@@ -331,7 +376,6 @@ def login():
         user = get_user_by_email(
             email
         )
-
 
         if not user:
 
@@ -344,17 +388,13 @@ def login():
 
             }), 401
 
-
         # ----------------------------------------------------
         # CHECK PASSWORD
         # ----------------------------------------------------
 
         if not check_password_hash(
-
             user["password_hash"],
-
             password
-
         ):
 
             return jsonify({
@@ -366,12 +406,15 @@ def login():
 
             }), 401
 
+        # Reset rate limiter upon successful authentication
+        rate_limiter.reset(rate_key)
 
         # ----------------------------------------------------
         # CREATE SESSION
         # ----------------------------------------------------
 
         session["user_id"] = user["id"]
+        session.permanent = True
 
 
         return jsonify({
@@ -659,26 +702,50 @@ def create_contact():
         ).strip() or None
 
 
-        if not name:
+        if not name or len(name) < 1 or len(name) > 60:
 
             return jsonify({
 
                 "success": False,
 
                 "message":
-                    "Contact name is required"
+                    "Contact name must be between 1 and 60 characters"
 
             }), 400
 
-
-        if not phone:
+        PHONE_REGEX = r"^\+?[0-9\s\-()]{7,20}$"
+        if not phone or not re.match(PHONE_REGEX, phone):
 
             return jsonify({
 
                 "success": False,
 
                 "message":
-                    "Phone number is required"
+                    "Enter a valid phone number (7-20 digits)"
+
+            }), 400
+
+        TG_REGEX = r"^@?[a-zA-Z0-9_]{4,64}$|^-?[0-9]{5,20}$"
+        if telegram_chat_id and not re.match(TG_REGEX, telegram_chat_id):
+
+            return jsonify({
+
+                "success": False,
+
+                "message":
+                    "Enter a valid Telegram username (@handle) or numeric Chat ID"
+
+            }), 400
+
+        existing_contacts = get_contacts(session["user_id"])
+        if len(existing_contacts) >= 20:
+
+            return jsonify({
+
+                "success": False,
+
+                "message":
+                    "Maximum contact limit reached (20 contacts max)"
 
             }), 400
 
@@ -815,6 +882,10 @@ def test_contact_notification(
 
     try:
 
+        rate_resp = check_rate_limit(f"test_contact:{session['user_id']}", max_requests=5, window_seconds=60)
+        if rate_resp:
+            return rate_resp
+
         contacts = get_contacts(
             session["user_id"]
         )
@@ -891,18 +962,19 @@ def sos():
 
     try:
 
-        data = request.get_json() or {}
+        rate_resp = check_rate_limit(f"sos:{session['user_id']}", max_requests=1, window_seconds=3)
+        if rate_resp:
+            return rate_resp
 
+        data = request.get_json() or {}
 
         latitude = data.get(
             "latitude"
         )
 
-
         longitude = data.get(
             "longitude"
         )
-
 
         # ----------------------------------------------------
         # LOCATION VALIDATION (OPTIONAL FOR EMERGENCY RESILIENCE)
@@ -929,7 +1001,6 @@ def sos():
             latitude = None
             longitude = None
 
-
         # ----------------------------------------------------
         # TRIGGER TYPE
         # ----------------------------------------------------
@@ -941,6 +1012,12 @@ def sos():
 
         if trigger_type == "button":
             trigger_type = "manual"
+
+        if trigger_type not in ["manual", "hand_gesture", "voice"]:
+            return jsonify({
+                "success": False,
+                "message": "Invalid trigger_type. Must be manual, hand_gesture, or voice"
+            }), 400
 
 
         # ----------------------------------------------------

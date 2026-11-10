@@ -42,6 +42,115 @@ let voiceCooldownUntil = 0;
 
 
 /* ============================================================
+   SYSTEM READINESS MATRIX STATE
+   ============================================================ */
+
+const systemReadiness = {
+    gesture: "waiting",
+    voice: "waiting",
+    gps: "checking",
+    contactsCount: 0
+};
+
+function updateReadinessUI() {
+    const badge = document.getElementById("overallReadinessBadge");
+    const gEl = document.getElementById("matrixGestureStatus");
+    const vEl = document.getElementById("matrixVoiceStatus");
+    const gpsEl = document.getElementById("matrixGpsStatus");
+    const cEl = document.getElementById("matrixContactsStatus");
+
+    if (gEl) {
+        if (systemReadiness.gesture === "active") {
+            gEl.textContent = "🟢 Camera & Palm Active";
+            gEl.className = "readiness-value active";
+        } else if (systemReadiness.gesture === "waiting") {
+            gEl.textContent = "🟡 Initializing Camera...";
+            gEl.className = "readiness-value waiting";
+        } else {
+            gEl.textContent = "🔴 Camera Inactive";
+            gEl.className = "readiness-value disabled";
+        }
+    }
+
+    if (vEl) {
+        if (systemReadiness.voice === "listening") {
+            vEl.textContent = "🟢 Continuous Listening";
+            vEl.className = "readiness-value active";
+        } else if (systemReadiness.voice === "paused") {
+            vEl.textContent = "🟡 Recognition Paused";
+            vEl.className = "readiness-value paused";
+        } else if (systemReadiness.voice === "waiting") {
+            vEl.textContent = "🟡 Starting Mic...";
+            vEl.className = "readiness-value waiting";
+        } else {
+            vEl.textContent = "🔴 Mic Disabled/Blocked";
+            vEl.className = "readiness-value disabled";
+        }
+    }
+
+    if (gpsEl) {
+        if (systemReadiness.gps === "ready") {
+            gpsEl.textContent = "🟢 Location Fix Acquired";
+            gpsEl.className = "readiness-value ready";
+        } else if (systemReadiness.gps === "checking") {
+            gpsEl.textContent = "🟡 Acquiring GPS...";
+            gpsEl.className = "readiness-value checking";
+        } else {
+            gpsEl.textContent = "⚠️ Fallback (GPS Denied)";
+            gpsEl.className = "readiness-value unavailable";
+        }
+    }
+
+    if (cEl) {
+        if (systemReadiness.contactsCount > 0) {
+            cEl.textContent = `🟢 ${systemReadiness.contactsCount} Contact${systemReadiness.contactsCount > 1 ? "s" : ""} Armed`;
+            cEl.className = "readiness-value ready";
+        } else {
+            cEl.textContent = "⚠️ 0 Contacts Configured";
+            cEl.className = "readiness-value warning";
+        }
+    }
+
+    if (badge) {
+        const isShieldArmed = (
+            (systemReadiness.gesture === "active" || systemReadiness.voice === "listening") &&
+            systemReadiness.contactsCount > 0
+        );
+
+        if (isShieldArmed) {
+            badge.textContent = "🛡️ Full Protection Armed";
+            badge.className = "readiness-badge armed";
+        } else if (systemReadiness.contactsCount === 0) {
+            badge.textContent = "⚠️ Action: Add Contacts";
+            badge.className = "readiness-badge partial";
+        } else {
+            badge.textContent = "🟡 Partial Defense Active";
+            badge.className = "readiness-badge partial";
+        }
+    }
+}
+
+function probeGpsReadiness() {
+    if (!navigator.geolocation) {
+        systemReadiness.gps = "unavailable";
+        updateReadinessUI();
+        return;
+    }
+    navigator.geolocation.getCurrentPosition(
+        () => {
+            systemReadiness.gps = "ready";
+            updateReadinessUI();
+        },
+        () => {
+            systemReadiness.gps = "unavailable";
+            updateReadinessUI();
+        },
+        { timeout: 5000, maximumAge: 30000 }
+    );
+}
+
+
+/* ============================================================
    ELEMENTS
    ============================================================ */
 
@@ -728,6 +837,10 @@ function showDashboard() {
     startGestureSystem();
 
     startVoiceSOS();
+
+    probeGpsReadiness();
+
+    updateReadinessUI();
 }
 
 
@@ -788,6 +901,8 @@ async function startCamera() {
 
         await video.play();
 
+        systemReadiness.gesture = "active";
+        updateReadinessUI();
 
         if (status) {
 
@@ -805,6 +920,9 @@ async function startCamera() {
             "Camera error:",
             error
         );
+
+        systemReadiness.gesture = "disabled";
+        updateReadinessUI();
 
 
         if (status) {
@@ -1857,6 +1975,9 @@ function startVoiceSOS() {
             toggleVoiceButton.textContent = "Voice Unsupported";
         }
 
+        systemReadiness.voice = "disabled";
+        updateReadinessUI();
+
         return;
     }
 
@@ -1883,6 +2004,10 @@ function startVoiceSOS() {
 
                 voiceRunning =
                     true;
+
+                systemReadiness.voice =
+                    "listening";
+                updateReadinessUI();
 
                 console.log(
                     "🎤 Voice SOS listening..."
@@ -1937,6 +2062,8 @@ function startVoiceSOS() {
 
                     voiceEnabled = false;
                     voiceRunning = false;
+                    systemReadiness.voice = "disabled";
+                    updateReadinessUI();
 
                     updateVoiceStatus(
                         "🎤 Microphone permission denied.",
@@ -2141,6 +2268,9 @@ function toggleVoiceSOS() {
 
         stopVoiceSOS();
 
+        systemReadiness.voice = "paused";
+        updateReadinessUI();
+
         if (btn) {
             btn.textContent = "Resume Voice SOS";
             btn.classList.add("paused");
@@ -2156,6 +2286,9 @@ function toggleVoiceSOS() {
         );
 
     } else {
+
+        systemReadiness.voice = "listening";
+        updateReadinessUI();
 
         if (btn) {
             btn.textContent = "Pause Voice SOS";
@@ -2235,6 +2368,13 @@ async function loadContacts() {
 
         const data =
             await response.json();
+
+        systemReadiness.contactsCount =
+            (data.contacts && Array.isArray(data.contacts))
+                ? data.contacts.length
+                : 0;
+
+        updateReadinessUI();
 
 
         const list =

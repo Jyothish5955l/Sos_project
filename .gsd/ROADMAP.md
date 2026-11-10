@@ -1,25 +1,26 @@
 ---
 milestone: SOS Guardian Core Delivery
 version: 1.0.0
-updated: 2026-11-10T09:42:00+05:30
+updated: 2026-11-10T10:20:00+05:30
 ---
 
 # Roadmap — SOS Guardian
 
-> **Current Phase:** Phase 2 — Core System Stabilization  
-> **Status:** Completed Phase 2 (Awaiting User Approval for Phase 3)  
+> **Current Phase:** Phase 5 — Security Hardening & UI/UX Polish  
+> **Status:** Completed Phase 5 (Awaiting User Approval for Phase 6)  
 > **Approval Protocol:** Strict phase-by-phase execution control. Do NOT advance without explicit user approval (`APPROVE PHASE [N]`).
 
 ---
 
 ## Must-Haves (from SPEC.md)
 
-- [x] Multi-modal SOS triggers: Manual, Open-Palm Gesture (browser MediaPipe), Voice commands (Web Speech API - Phase 3).
+- [x] Multi-modal SOS triggers: Manual, Open-Palm Gesture (browser MediaPipe), Voice commands (Web Speech API).
 - [x] 5-second countdown with visual/audio abort on all triggers.
-- [x] Robust GPS acquisition with fallback for missing/denied location (Tested & Verified).
-- [x] Atomic SQLite emergency event persistence with foreign key constraints (Tested & Verified).
-- [ ] Emergency notification dispatch to Telegram Bot API with location maps link and provider status tracking (Phase 4).
-- [ ] Secure user authentication and complete user data isolation (Phase 5).
+- [x] Robust GPS acquisition with fallback for missing/denied location.
+- [x] Atomic SQLite emergency event persistence with foreign key constraints.
+- [x] Emergency notification dispatch to Telegram Bot API with location maps link and provider status tracking.
+- [x] Secure user authentication, session hygiene, rate limiting, and complete cross-user data isolation.
+- [x] Real-time System Readiness Matrix reflecting active sensor and contact arming status.
 
 ---
 
@@ -66,7 +67,7 @@ updated: 2026-11-10T09:42:00+05:30
 ---
 
 ### Phase 4: Emergency Notification Delivery
-**Status:** 🔄 Completed (Awaiting Approval to proceed to Phase 5)  
+**Status:** ✅ Complete (Approved)  
 **Objective:** Implement production-ready Telegram Bot API dispatcher, establish modular SMS provider abstraction, verify FCM push notification integration, and build multichannel delivery tracking.  
 **Deliverables:**
 - [x] Built Telegram Bot API dispatcher (`backend/providers/telegram_provider.py`) supporting HTML emergency alert formatting, location links, explicit mock fallback mode, and Telegram API error classification (400, 401, 429).
@@ -81,14 +82,24 @@ updated: 2026-11-10T09:42:00+05:30
 ---
 
 ### Phase 5: Security Hardening & UI/UX Polish
-**Status:** ⬜ Not Started (Awaiting Phase 4 Approval)  
-**Objective:** Harden authentication (session hygiene, password hashing, route protection, data isolation), polish dashboard interface for mobile-first accessibility, and refine status indicators.  
-**Depends on:** Phase 4 approval.
+**Status:** 🔄 Completed (Awaiting Approval to proceed to Phase 6)  
+**Objective:** Harden authentication (session hygiene, cookie policies, sliding-window rate limiting, input validation, cross-user isolation), implement real-time System Readiness Matrix (PRD Module B), and optimize mobile accessibility.  
+**Deliverables:**
+- [x] Implemented thread-safe in-memory sliding window rate limiter (`backend/rate_limiter.py`).
+- [x] Configured strict session cookie hygiene: `SESSION_COOKIE_HTTPONLY=True`, `SESSION_COOKIE_SAMESITE="Lax"`, `PERMANENT_SESSION_LIFETIME=timedelta(days=7)`, `MAX_CONTENT_LENGTH=2MB`.
+- [x] Added security response headers in `backend/app.py`: `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `X-XSS-Protection: 1; mode=block`, `Referrer-Policy: strict-origin-when-cross-origin`, and `Permissions-Policy`.
+- [x] Implemented endpoint rate limits: `/api/auth/login` (5/60s), `/api/auth/register` (10/60s), `/api/sos` (1/3s), `/api/contacts/<id>/test` (5/60s).
+- [x] Added strict input validation for user registration (email regex, 6-128 char password), contact creation (phone regex, telegram regex, 20 contacts limit), and SOS requests (trigger modality & coordinate range validation).
+- [x] Enforced strict cross-user data isolation and route protection on all contact management and SOS endpoints.
+- [x] Built dynamic System Readiness Matrix in `templates/index.html`, `static/style.css`, and `static/app.js` with live multi-sensor hardware status (Camera/Gesture, Voice, GPS, Contacts) and overall operational badge.
+- [x] Optimized touch target accessibility (44px minimum height/width) and added `aria-label` tags for screen readers.
+- [x] Authored and executed automated security test suite `tests/test_phase5_security.py` (10/10 tests passing).
+- [x] Verified zero regressions across all 59 total automated tests.
 
 ---
 
 ### Phase 6: Intelligent Emergency Features
-**Status:** ⬜ Not Started  
+**Status:** ⬜ Not Started (Awaiting Phase 5 Approval)  
 **Objective:** Explore and prototype advanced intelligent features: fall detection via pose estimation, live location tracking, and multi-contact escalation.  
 **Depends on:** Phase 5 approval.
 
@@ -109,7 +120,7 @@ updated: 2026-11-10T09:42:00+05:30
 | **Phase 1** | Existing Project Audit & Codebase Health | ✅ Complete | 100% |
 | **Phase 2** | Core System Stabilization | ✅ Complete | 100% |
 | **Phase 3** | Voice SOS Engine | ✅ Complete | 100% |
-| **Phase 4** | Emergency Notification Delivery | 🔄 Completed (Review) | 100% |
-| **Phase 5** | Security Hardening & UI/UX Polish | ⬜ Not Started | 0% |
+| **Phase 4** | Emergency Notification Delivery | ✅ Complete | 100% |
+| **Phase 5** | Security Hardening & UI/UX Polish | 🔄 Completed (Review) | 100% |
 | **Phase 6** | Intelligent Emergency Features | ⬜ Not Started | 0% |
 | **Phase 7** | Production Deployment & Final Verification | ⬜ Not Started | 0% |
