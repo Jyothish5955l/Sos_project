@@ -59,3 +59,4 @@ yarn-error.log*
 # Database & Runtime
 data/*.db-journal
 data/*.db-wal
+
