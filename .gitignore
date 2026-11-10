@@ -60,3 +60,17 @@ yarn-error.log*
 data/*.db-journal
 data/*.db-wal
 
+# Internal Framework & Development Scaffolding
+.agent/
+.agents/
+.gemini/
+.gsd/
+adapters/
+GSD-STYLE.md
+PROJECT_RULES.md
+model_capabilities.yaml
+PHASE_REPORT.md
+scripts/validate-*
+scripts/search_repo.*
+scripts/setup_search.*
+
