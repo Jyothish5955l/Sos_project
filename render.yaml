@@ -16,17 +16,5 @@ services:
       - key: SMS_PROVIDER
         value: mock
       - key: DATABASE_PATH
-        value: /var/data/sos_guardian.db
-      - key: PROXY_FIX_FOR
-        value: "1"
-      - key: PROXY_FIX_PROTO
-        value: "1"
-      - key: PROXY_FIX_HOST
-        value: "1"
-      - key: STATIC_CACHE_SECONDS
-        value: "86400"
-    disk:
-      name: sos-guardian-data
-      mountPath: /var/data
-      sizeGB: 1
+        value: data/sos_guardian.db
 
