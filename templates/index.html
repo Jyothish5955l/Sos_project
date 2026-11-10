@@ -227,6 +227,10 @@
 
         <div class="user-area">
 
+            <button id="topbarSosButton" class="topbar-sos-btn" type="button" title="Instant Emergency Alert">
+                🚨 Quick SOS
+            </button>
+
             <span id="dashboardUserName">
                 User
             </span>
@@ -262,287 +266,257 @@
         </div>
 
 
-        <!-- ================= SYSTEM READINESS MATRIX ================= -->
-
-        <section class="readiness-panel" aria-label="System Readiness Matrix">
-
-            <div class="readiness-header">
-
-                <div class="readiness-title-group">
-                    <span class="readiness-shield">🛡️</span>
-                    <div>
-                        <h2>System Readiness Matrix</h2>
-                        <p>Live health and sensor telemetry across all emergency modalities.</p>
-                    </div>
-                </div>
-
-                <div id="overallReadinessBadge" class="readiness-badge initializing">
-                    Initializing Sensors...
-                </div>
-
-            </div>
-
-            <div class="readiness-grid">
-
-                <div class="readiness-card">
-                    <div class="readiness-icon-wrap">✋</div>
-                    <div class="readiness-details">
-                        <span class="readiness-label">Gesture Guardian</span>
-                        <strong id="matrixGestureStatus" class="readiness-value waiting">Initializing...</strong>
-                    </div>
-                </div>
-
-                <div class="readiness-card">
-                    <div class="readiness-icon-wrap">🎤</div>
-                    <div class="readiness-details">
-                        <span class="readiness-label">Voice SOS Engine</span>
-                        <strong id="matrixVoiceStatus" class="readiness-value waiting">Initializing...</strong>
-                    </div>
-                </div>
-
-                <div class="readiness-card">
-                    <div class="readiness-icon-wrap">📍</div>
-                    <div class="readiness-details">
-                        <span class="readiness-label">GPS Geolocation</span>
-                        <strong id="matrixGpsStatus" class="readiness-value waiting">Checking Signal...</strong>
-                    </div>
-                </div>
-
-                <div class="readiness-card">
-                    <div class="readiness-icon-wrap">👥</div>
-                    <div class="readiness-details">
-                        <span class="readiness-label">Emergency Contacts</span>
-                        <strong id="matrixContactsStatus" class="readiness-value waiting">Checking...</strong>
-                    </div>
-                </div>
-
-            </div>
-
-        </section>
-
-
-        <!-- ================= GESTURE ================= -->
-
-        <section class="gesture-panel">
-
-            <div class="section-heading">
-
-                <div>
-                    <h2>✋ Gesture Guardian</h2>
-
-                    <p>
-                        Show an open palm to activate SOS.
-                    </p>
-                </div>
-
-                <span
-                    id="gestureStatus"
-                    class="gesture-status"
-                >
-                    Starting camera...
-                </span>
-
-            </div>
-
-
-            <div class="camera-wrapper">
-
-                <video
-                    id="cameraVideo"
-                    autoplay
-                    playsinline
-                    muted
-                ></video>
-
-                <div class="camera-overlay">
-
-                    <div
-                        id="gestureText"
-                        class="gesture-waiting"
-                    >
-                        Waiting for hand...
-                    </div>
-
-                </div>
-
-                <div class="camera-corner top-left"></div>
-                <div class="camera-corner top-right"></div>
-                <div class="camera-corner bottom-left"></div>
-                <div class="camera-corner bottom-right"></div>
-
-            </div>
-
-
-            <div class="gesture-help">
-
-                <strong>How it works</strong>
-
-                <div class="gesture-steps">
-
-                    <span>1️⃣ Show your palm</span>
-                    <span>2️⃣ Keep all fingers open</span>
-                    <span>3️⃣ Hold for 2 seconds</span>
-
-                </div>
-
-            </div>
-
-        </section>
-
-
-        <!-- ================= VOICE SOS ================= -->
-
-        <section class="voice-panel">
-
-            <div class="section-heading">
-
-                <div>
-                    <h2>🎤 Voice SOS Guardian</h2>
-
-                    <p>
-                        Speak an emergency distress phrase to trigger hands-free SOS.
-                    </p>
-                </div>
-
-                <div class="voice-controls">
-
-                    <span
-                        id="voiceStatus"
-                        class="voice-status"
-                    >
-                        Starting voice listener...
-                    </span>
-
-                    <button
-                        id="toggleVoiceButton"
-                        class="toggle-voice-btn"
-                        type="button"
-                    >
-                        Pause Voice SOS
-                    </button>
-
-                </div>
-
-            </div>
-
-
-            <div class="voice-telemetry">
-
-                <div class="voice-transcript-wrapper">
-
-                    <span class="transcript-label">Live Speech Transcript:</span>
-
-                    <div
-                        id="voiceTranscript"
-                        class="voice-transcript"
-                    >
-                        Listening for voice input...
-                    </div>
-
-                </div>
-
-                <div class="voice-phrases">
-
-                    <strong>Configured Emergency Phrases:</strong>
-
-                    <div class="phrase-tags">
-                        <span class="phrase-tag">"SOS"</span>
-                        <span class="phrase-tag">"Help me"</span>
-                        <span class="phrase-tag">"Emergency"</span>
-                    </div>
-
-                </div>
-
-            </div>
-
-        </section>
-
-
-        <!-- ================= MANUAL SOS ================= -->
-
-        <section class="sos-panel">
-
-            <div>
-                <h2>Emergency SOS</h2>
-
-                <p>
-                    Press the button if you need immediate help.
-                </p>
-            </div>
-
-            <button
-                id="sosButton"
-                class="sos-button"
-                type="button"
-                aria-label="Activate Emergency SOS immediately"
-            >
-                <span>SOS</span>
-                <small>EMERGENCY</small>
+        <!-- ================= UPPER DASHBOARD NAVIGATION (CAROUSEL / TABS) ================= -->
+        <nav class="dashboard-tabs" aria-label="Dashboard views">
+            <button type="button" class="tab-btn active" data-tab="tabEmergency">
+                <span class="tab-icon">🚨</span>
+                <span class="tab-text">Emergency Center</span>
             </button>
+            <button type="button" class="tab-btn" data-tab="tabTriggers">
+                <span class="tab-icon">✋</span>
+                <span class="tab-text">AI Triggers (Camera & Voice)</span>
+            </button>
+            <button type="button" class="tab-btn" data-tab="tabSafety">
+                <span class="tab-icon">⏱️</span>
+                <span class="tab-text">Safety Tools</span>
+            </button>
+            <button type="button" class="tab-btn" data-tab="tabGuardians">
+                <span class="tab-icon">👥</span>
+                <span class="tab-text">Guardians & Settings</span>
+            </button>
+            <button type="button" class="tab-btn" data-tab="tabHistory">
+                <span class="tab-icon">📜</span>
+                <span class="tab-text">SOS History</span>
+            </button>
+        </nav>
 
-            <div class="trigger-info">
-                ✋ Hand Gesture &nbsp; • &nbsp; 🔴 Manual Button &nbsp; • &nbsp; 🎤 Voice Commands &nbsp; • &nbsp; 🚶‍♂️ Fall Detection &nbsp; • &nbsp; ⏱️ Safety Check-in
-            </div>
+        <!-- ================= TAB 1: EMERGENCY CENTER ================= -->
+        <div id="tabEmergency" class="tab-content">
 
-        </section>
+            <!-- ACTIVE EMERGENCY & LIVE TRACKING PANEL (VISIBLE WHEN SOS TRIGGERED) -->
+            <section id="activeEmergencyPanel" class="panel emergency-active-panel hidden">
+                <div class="emergency-active-header">
+                    <div>
+                        <span class="pulse-dot"></span>
+                        <h3 id="activeEmergencyHeading">🚨 Active Emergency In Progress</h3>
+                        <p id="activeEmergencySubtitle">Live multi-channel emergency alert dispatched to guardians and responders.</p>
+                    </div>
+                    <div class="emergency-active-badges">
+                        <span id="activeEventIdBadge" class="badge-pill">Event #--</span>
+                        <span id="activeEscalationBadge" class="badge-pill tier-pill">Tier 1 Primary</span>
+                    </div>
+                </div>
 
+                <div class="emergency-active-grid">
+                    <div class="active-metric-card">
+                        <span class="metric-label">📍 Live GPS Stream</span>
+                        <strong id="activeBreadcrumbsCount">1 breadcrumb</strong>
+                        <small id="activeCoordinatesText">Streaming coordinates...</small>
+                    </div>
 
-        <!-- ================= PHASE 6: ACTIVE EMERGENCY & LIVE TRACKING PANEL ================= -->
+                    <div class="active-metric-card">
+                        <span class="metric-label">⏱️ Escalation Status</span>
+                        <strong id="escalationStatusText">Tier 1 Notified</strong>
+                        <small id="escalationCountdownText">Single Alert Mode (Auto-escalation disabled)</small>
+                    </div>
 
-        <section id="activeEmergencyPanel" class="panel emergency-active-panel hidden">
+                    <div class="active-metric-card">
+                        <span class="metric-label">🛡️ Acknowledgement</span>
+                        <strong id="acknowledgementStatusText">Awaiting Response</strong>
+                        <small id="acknowledgedByText">Unacknowledged</small>
+                    </div>
+                </div>
 
-            <div class="emergency-active-header">
+                <div class="emergency-active-actions">
+                    <button id="btnManualEscalate" class="btn btn-warning-action" type="button">
+                        ⚡ Escalate to Next Tier Now
+                    </button>
+                    <button id="btnAcknowledgeAlert" class="btn btn-success-action" type="button">
+                        ✅ Acknowledge / Responder On Scene
+                    </button>
+                    <a id="btnTrackingMapLink" href="#" target="_blank" class="btn btn-outline-action">
+                        🗺️ Open Live Tracking Trail
+                    </a>
+                </div>
+            </section>
+
+            <!-- MANUAL SOS BUTTON -->
+            <section class="sos-panel">
                 <div>
-                    <span class="pulse-dot"></span>
-                    <h3 id="activeEmergencyHeading">🚨 Active Emergency In Progress</h3>
-                    <p id="activeEmergencySubtitle">Live multi-channel emergency alert dispatched to guardians and responders.</p>
-                </div>
-                <div class="emergency-active-badges">
-                    <span id="activeEventIdBadge" class="badge-pill">Event #--</span>
-                    <span id="activeEscalationBadge" class="badge-pill tier-pill">Tier 1 Primary</span>
-                </div>
-            </div>
-
-            <div class="emergency-active-grid">
-                <div class="active-metric-card">
-                    <span class="metric-label">📍 Live GPS Stream</span>
-                    <strong id="activeBreadcrumbsCount">1 breadcrumb</strong>
-                    <small id="activeCoordinatesText">Streaming coordinates...</small>
+                    <h2>Emergency SOS</h2>
+                    <p>Press the button if you need immediate help.</p>
                 </div>
 
-                <div class="active-metric-card">
-                    <span class="metric-label">⏱️ Escalation Status</span>
-                    <strong id="escalationStatusText">Tier 1 Notified</strong>
-                    <small id="escalationCountdownText">Auto-escalating to Tier 2 in 60s</small>
-                </div>
-
-                <div class="active-metric-card">
-                    <span class="metric-label">🛡️ Acknowledgement</span>
-                    <strong id="acknowledgementStatusText">Awaiting Response</strong>
-                    <small id="acknowledgedByText">Unacknowledged</small>
-                </div>
-            </div>
-
-            <div class="emergency-active-actions">
-                <button id="btnManualEscalate" class="btn btn-warning-action" type="button">
-                    ⚡ Escalate to Next Tier Now
+                <button
+                    id="sosButton"
+                    class="sos-button"
+                    type="button"
+                    aria-label="Activate Emergency SOS immediately"
+                >
+                    <span>SOS</span>
+                    <small>EMERGENCY</small>
                 </button>
-                <button id="btnAcknowledgeAlert" class="btn btn-success-action" type="button">
-                    ✅ Acknowledge / Responder On Scene
-                </button>
-                <a id="btnTrackingMapLink" href="#" target="_blank" class="btn btn-outline-action">
-                    🗺️ Open Live Tracking Trail
-                </a>
+
+                <div class="trigger-info">
+                    ✋ Hand Gesture &nbsp; • &nbsp; 🔴 Manual Button &nbsp; • &nbsp; 🎤 Voice Commands &nbsp; • &nbsp; 🚶‍♂️ Fall Detection &nbsp; • &nbsp; ⏱️ Safety Check-in
+                </div>
+            </section>
+
+            <!-- SINGLE-ALERT CELLULAR GATEWAY BANNER -->
+            <div class="mode-banner">
+                <span class="mode-icon">📱</span>
+                <div class="mode-text">
+                    <strong>Direct Cellular SMS Gateway Active (httpSMS)</strong>
+                    <p>Dispatches real SMS with clickable Google Maps GPS coordinates directly via your Android gateway (SIM1).</p>
+                </div>
             </div>
 
-        </section>
+            <!-- SYSTEM READINESS MATRIX -->
+            <section class="readiness-panel" aria-label="System Readiness Matrix">
+                <div class="readiness-header">
+                    <div class="readiness-title-group">
+                        <span class="readiness-shield">🛡️</span>
+                        <div>
+                            <h2>System Readiness Matrix</h2>
+                            <p>Live health and sensor telemetry across all emergency modalities.</p>
+                        </div>
+                    </div>
+                    <div id="overallReadinessBadge" class="readiness-badge initializing">
+                        Initializing Sensors...
+                    </div>
+                </div>
 
+                <div class="readiness-grid">
+                    <div class="readiness-card">
+                        <div class="readiness-icon-wrap">✋</div>
+                        <div class="readiness-details">
+                            <span class="readiness-label">Gesture Guardian</span>
+                            <strong id="matrixGestureStatus" class="readiness-value waiting">Initializing...</strong>
+                        </div>
+                    </div>
 
-        <!-- ================= PHASE 6: INTELLIGENT EMERGENCY SUITE ================= -->
+                    <div class="readiness-card">
+                        <div class="readiness-icon-wrap">🎤</div>
+                        <div class="readiness-details">
+                            <span class="readiness-label">Voice SOS Engine</span>
+                            <strong id="matrixVoiceStatus" class="readiness-value waiting">Initializing...</strong>
+                        </div>
+                    </div>
 
-        <div class="intelligent-grid">
+                    <div class="readiness-card">
+                        <div class="readiness-icon-wrap">📍</div>
+                        <div class="readiness-details">
+                            <span class="readiness-label">GPS Geolocation</span>
+                            <strong id="matrixGpsStatus" class="readiness-value waiting">Checking Signal...</strong>
+                        </div>
+                    </div>
 
-            <!-- 1. FALL & IMPACT DETECTION -->
+                    <div class="readiness-card">
+                        <div class="readiness-icon-wrap">👥</div>
+                        <div class="readiness-details">
+                            <span class="readiness-label">Emergency Contacts</span>
+                            <strong id="matrixContactsStatus" class="readiness-value waiting">Checking...</strong>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- EMERGENCY HELPLINES -->
+            <section class="panel helplines-panel">
+                <div class="panel-heading">
+                    <div>
+                        <h3>🚨 Quick Emergency Helplines (Direct Dial)</h3>
+                        <p class="intelligent-subtitle">One-tap telephone access to 24/7 national emergency response services.</p>
+                    </div>
+                </div>
+
+                <div class="helpline-pills">
+                    <a href="tel:112" class="helpline-pill police">🚨 Police / All-in-One (112 / 100)</a>
+                    <a href="tel:108" class="helpline-pill ambulance">🚑 Ambulance (108 / 102)</a>
+                    <a href="tel:1091" class="helpline-pill women">🛡️ Women Helpline (1091)</a>
+                    <a href="tel:101" class="helpline-pill fire">🚒 Fire Service (101)</a>
+                </div>
+            </section>
+
+        </div>
+
+        <!-- ================= TAB 2: AI TRIGGERS (CAMERA & VOICE) ================= -->
+        <div id="tabTriggers" class="tab-content hidden">
+
+            <!-- GESTURE GUARDIAN -->
+            <section class="gesture-panel">
+                <div class="section-heading">
+                    <div>
+                        <h2>✋ Gesture Guardian</h2>
+                        <p>Show an open palm to activate hands-free SOS.</p>
+                    </div>
+
+                    <span id="gestureStatus" class="gesture-status">
+                        Starting camera...
+                    </span>
+                </div>
+
+                <div class="camera-wrapper">
+                    <video id="cameraVideo" autoplay playsinline muted></video>
+                    <div class="camera-overlay">
+                        <div id="gestureText" class="gesture-waiting">
+                            Waiting for hand...
+                        </div>
+                    </div>
+                    <div class="camera-corner top-left"></div>
+                    <div class="camera-corner top-right"></div>
+                    <div class="camera-corner bottom-left"></div>
+                    <div class="camera-corner bottom-right"></div>
+                </div>
+
+                <div class="gesture-help">
+                    <strong>How it works</strong>
+                    <div class="gesture-steps">
+                        <span>1️⃣ Show your palm</span>
+                        <span>2️⃣ Keep all fingers open</span>
+                        <span>3️⃣ Hold for 2 seconds</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- VOICE SOS -->
+            <section class="voice-panel">
+                <div class="section-heading">
+                    <div>
+                        <h2>🎤 Voice SOS Guardian</h2>
+                        <p>Speak an emergency distress phrase to trigger hands-free SOS.</p>
+                    </div>
+
+                    <div class="voice-controls">
+                        <span id="voiceStatus" class="voice-status">
+                            Starting voice listener...
+                        </span>
+                        <button id="toggleVoiceButton" class="toggle-voice-btn" type="button">
+                            Pause Voice SOS
+                        </button>
+                    </div>
+                </div>
+
+                <div class="voice-telemetry">
+                    <div class="voice-transcript-wrapper">
+                        <span class="transcript-label">Live Speech Transcript:</span>
+                        <div id="voiceTranscript" class="voice-transcript">
+                            Listening for voice input...
+                        </div>
+                    </div>
+
+                    <div class="voice-phrases">
+                        <strong>Configured Emergency Phrases:</strong>
+                        <div class="phrase-tags">
+                            <span class="phrase-tag">"SOS"</span>
+                            <span class="phrase-tag">"Help me"</span>
+                            <span class="phrase-tag">"Emergency"</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- FALL & IMPACT DETECTION -->
             <section class="panel intelligent-card">
                 <div class="panel-heading">
                     <div>
@@ -564,7 +538,12 @@
                 </div>
             </section>
 
-            <!-- 2. SAFETY CHECK-IN TIMER -->
+        </div>
+
+        <!-- ================= TAB 3: SAFETY TOOLS ================= -->
+        <div id="tabSafety" class="tab-content hidden">
+
+            <!-- SAFETY CHECK-IN TIMER -->
             <section class="panel intelligent-card">
                 <div class="panel-heading">
                     <div>
@@ -616,20 +595,13 @@
                 </div>
             </section>
 
-            <!-- 3. NEARBY EMERGENCY SERVICES & HELPLINES -->
+            <!-- NEARBY EMERGENCY SERVICES & HELPLINES -->
             <section class="panel intelligent-card">
                 <div class="panel-heading">
                     <div>
-                        <h3>🏥 Emergency Helplines & Nearby Services</h3>
-                        <p class="intelligent-subtitle">One-tap direct dial helplines and geo-targeted hospital/police lookup</p>
+                        <h3>🏥 Nearby Medical & Police Services</h3>
+                        <p class="intelligent-subtitle">Geo-targeted hospital and police station locator via GPS</p>
                     </div>
-                </div>
-
-                <div class="helpline-pills">
-                    <a href="tel:112" class="helpline-pill police">🚨 Police (112 / 100)</a>
-                    <a href="tel:108" class="helpline-pill ambulance">🚑 Ambulance (108 / 102)</a>
-                    <a href="tel:1091" class="helpline-pill women">🛡️ Women Helpline (1091)</a>
-                    <a href="tel:101" class="helpline-pill fire">🚒 Fire Service (101)</a>
                 </div>
 
                 <div class="nearby-search-actions">
@@ -644,15 +616,66 @@
 
         </div>
 
+        <!-- ================= TAB 4: GUARDIANS & SETTINGS ================= -->
+        <div id="tabGuardians" class="tab-content hidden">
 
-        <!-- ================= GRID ================= -->
+            <!-- ALERT SETTINGS & AUTO-ESCALATION CONFIG -->
+            <section class="panel alert-settings-panel">
+                <div class="panel-heading">
+                    <div>
+                        <h3>⚙️ Emergency Alert & Escalation Rules</h3>
+                        <p class="guardian-subtitle">Configure how SOS Guardian dispatches alerts and whether repeat messages should be sent.</p>
+                    </div>
+                </div>
 
-        <div class="dashboard-grid">
+                <div class="setting-card">
+                    <div class="setting-main">
+                        <div class="setting-text">
+                            <strong>Repeat Alert Auto-Escalation</strong>
+                            <p id="escalationSettingDesc">
+                                Currently: <b>Disabled (Single Alert Mode)</b>. When disabled, SOS Guardian dispatches exactly ONE urgent SMS with your Google Maps location to your primary guardians. No repeat messages will be sent.
+                            </p>
+                        </div>
+                        <div class="setting-control">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggleAutoEscalation">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
 
-            <!-- CONTACTS -->
+                <!-- TIER EXPLANATION CARD -->
+                <div class="tier-explainer">
+                    <h4>💡 How Guardian Priority Tiers Work</h4>
+                    <div class="tier-columns">
+                        <div class="tier-item tier-1">
+                            <div class="tier-badge-header">
+                                <span class="tier-pill">Tier 1 — Primary</span>
+                                <span class="tier-when">Immediate</span>
+                            </div>
+                            <p>Immediate family (Mom, Dad, Spouse). Notified instantly on any SOS trigger with full GPS pin.</p>
+                        </div>
+                        <div class="tier-item tier-2">
+                            <div class="tier-badge-header">
+                                <span class="tier-pill tier-2-pill">Tier 2 — Secondary</span>
+                                <span class="tier-when">Escalation Only</span>
+                            </div>
+                            <p>Close friends, neighbors, or roommates. Notified only if you manually escalate or if auto-escalation is turned on.</p>
+                        </div>
+                        <div class="tier-item tier-3">
+                            <div class="tier-badge-header">
+                                <span class="tier-pill tier-3-pill">Tier 3 — Backup</span>
+                                <span class="tier-when">Critical Fallback</span>
+                            </div>
+                            <p>Extended emergency contacts, local doctors, or trusted supervisors for high-severity alerts.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
+            <!-- CONTACTS MANAGER -->
             <section class="panel">
-
                 <div class="panel-heading">
                     <div>
                         <h3>👥 Guardian Emergency Contacts</h3>
@@ -661,7 +684,6 @@
                 </div>
 
                 <form id="contactForm">
-
                     <input
                         type="text"
                         id="contactName"
@@ -694,7 +716,6 @@
                     <button type="submit" id="addContactBtn">
                         + Add Guardian Contact
                     </button>
-
                 </form>
 
                 <div id="contactList">
@@ -702,27 +723,26 @@
                         Loading contacts...
                     </div>
                 </div>
-
             </section>
 
+        </div>
 
-            <!-- HISTORY -->
+        <!-- ================= TAB 5: INCIDENT HISTORY ================= -->
+        <div id="tabHistory" class="tab-content hidden">
 
             <section class="panel">
-
                 <div class="panel-heading">
-                    <h3>📜 SOS History</h3>
-                    <span>Recent alerts</span>
+                    <div>
+                        <h3>📜 SOS Incident History</h3>
+                        <p class="guardian-subtitle">Audit trail of all triggered distress signals, GPS coordinates, and SMS / Telegram delivery reports.</p>
+                    </div>
                 </div>
 
                 <div id="historyList">
-
                     <div class="empty">
                         Loading history...
                     </div>
-
                 </div>
-
             </section>
 
         </div>

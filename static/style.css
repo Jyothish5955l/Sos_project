@@ -1871,3 +1871,281 @@ input[type="submit"],
     cursor: pointer;
     min-height: 44px;
 }
+
+/* ============================================================
+   UPPER DASHBOARD TAB NAVIGATION & STREAMLINED LAYOUT
+   ============================================================ */
+
+.dashboard-tabs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #e2e8f0;
+    padding: 6px;
+    border-radius: 16px;
+    margin-bottom: 24px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+
+.dashboard-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: 12px;
+    border: none;
+    background: transparent;
+    color: #475569;
+    font-weight: 700;
+    font-size: 14px;
+    white-space: nowrap;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+}
+
+.tab-btn:hover {
+    color: #0f172a;
+    background: rgba(255, 255, 255, 0.5);
+}
+
+.tab-btn.active {
+    background: #ffffff;
+    color: #0f172a;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+.tab-btn .tab-icon {
+    font-size: 16px;
+}
+
+.tab-content {
+    animation: tabFadeIn 0.22s ease-out;
+}
+
+@keyframes tabFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Topbar Quick SOS Button */
+.topbar-sos-btn {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: #ffffff;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 9999px;
+    font-weight: 800;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.topbar-sos-btn:hover {
+    transform: scale(1.04);
+    box-shadow: 0 6px 18px rgba(220, 38, 38, 0.45);
+}
+
+/* Single-Alert Cellular Gateway Banner */
+.mode-banner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: linear-gradient(135deg, #eff6ff, #f8fafc);
+    border: 1px solid #bfdbfe;
+    border-left: 4px solid #3b82f6;
+    padding: 14px 18px;
+    border-radius: 14px;
+    margin-bottom: 24px;
+}
+
+.mode-banner .mode-icon {
+    font-size: 26px;
+}
+
+.mode-banner .mode-text strong {
+    display: block;
+    color: #1e3a8a;
+    font-size: 14px;
+    margin-bottom: 2px;
+}
+
+.mode-banner .mode-text p {
+    color: #475569;
+    font-size: 13px;
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Emergency Helplines Panel */
+.helplines-panel {
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 24px;
+    margin-top: 24px;
+    border: 1px solid var(--border);
+}
+
+/* Alert Settings & Toggle Switch */
+.alert-settings-panel {
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 24px;
+    margin-bottom: 24px;
+    border: 1px solid var(--border);
+}
+
+.setting-card {
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px;
+    margin: 16px 0 24px;
+}
+
+.setting-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+
+.setting-text strong {
+    display: block;
+    font-size: 15px;
+    color: #0f172a;
+    margin-bottom: 4px;
+}
+
+.setting-text p {
+    font-size: 13px;
+    color: #64748b;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 52px;
+    height: 28px;
+    flex-shrink: 0;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #cbd5e1;
+    transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 28px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 22px;
+    width: 22px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 50%;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background-color: #2563eb;
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(24px);
+}
+
+/* Tier Explainer 3-Column Layout */
+.tier-explainer h4 {
+    font-size: 15px;
+    font-weight: 800;
+    color: #0f172a;
+    margin-bottom: 12px;
+}
+
+.tier-columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+}
+
+.tier-item {
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tier-badge-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.tier-pill {
+    font-size: 12px;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.tier-2-pill {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.tier-3-pill {
+    background: #e0e7ff;
+    color: #3730a3;
+}
+
+.tier-when {
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.tier-item p {
+    font-size: 12px;
+    color: #475569;
+    line-height: 1.45;
+    margin: 0;
+}

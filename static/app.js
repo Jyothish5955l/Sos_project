@@ -3089,6 +3089,12 @@ function activateLiveEmergencyDashboard(eventId, eventData, trackingUrl) {
     escalationSecondsRemaining = 60;
     currentEscalationTier = 1;
 
+    // Automatically switch to Emergency Center tab so user sees live incident hub
+    const emergencyTabBtn = document.querySelector(`.dashboard-tabs .tab-btn[data-tab="tabEmergency"]`);
+    if (emergencyTabBtn && !emergencyTabBtn.classList.contains("active")) {
+        emergencyTabBtn.click();
+    }
+
     const panel = document.getElementById("activeEmergencyPanel");
     if (panel) panel.classList.remove("hidden");
 
@@ -3164,7 +3170,17 @@ function startEscalationCountdown(eventId) {
     if (escalationTimerInterval) clearInterval(escalationTimerInterval);
 
     const countdownText = document.getElementById("escalationCountdownText");
+    const isAutoEscalation = localStorage.getItem("sos_auto_escalation") === "true";
 
+    // Default: Single Alert Mode — Prevent repeat messages
+    if (!isAutoEscalation) {
+        if (countdownText) {
+            countdownText.textContent = "Single Alert Mode (Auto-escalation disabled)";
+        }
+        return;
+    }
+
+    escalationSecondsRemaining = 60;
     escalationTimerInterval = setInterval(() => {
         escalationSecondsRemaining--;
         if (countdownText) {
@@ -3521,3 +3537,67 @@ function initNearbyServices() {
 
 initNearbyServices();
 setTimeout(() => initSafetyCheckin(), 1000);
+
+/* ============================================================
+   UPPER DASHBOARD TAB NAVIGATION & STREAMLINED MODE SWITCHER
+   ============================================================ */
+
+function setupDashboardTabs() {
+    const tabButtons = document.querySelectorAll(".dashboard-tabs .tab-btn");
+    const tabPanels = document.querySelectorAll(".tab-content");
+
+    tabButtons.forEach(btn => {
+        btn.addEventListener("click", () => {
+            const targetId = btn.getAttribute("data-tab");
+            if (!targetId) return;
+
+            tabButtons.forEach(b => b.classList.remove("active"));
+            tabPanels.forEach(p => p.classList.add("hidden"));
+
+            btn.classList.add("active");
+            const targetPanel = document.getElementById(targetId);
+            if (targetPanel) {
+                targetPanel.classList.remove("hidden");
+            }
+        });
+    });
+
+    // Topbar Quick SOS button triggers the main SOS emergency button
+    document.getElementById("topbarSosButton")?.addEventListener("click", () => {
+        const mainSos = document.getElementById("sosButton");
+        if (mainSos) mainSos.click();
+    });
+
+    // Auto-escalation toggle (Single alert mode vs repeat alerts)
+    const toggleEscalation = document.getElementById("toggleAutoEscalation");
+    const descElem = document.getElementById("escalationSettingDesc");
+
+    function updateEscalationDesc(enabled) {
+        if (!descElem) return;
+        if (enabled) {
+            descElem.innerHTML = `Currently: <b style="color: #2563eb;">Enabled (Auto-Escalation Active)</b>. If an emergency alert is not acknowledged within 60s, SOS Guardian automatically dispatches follow-up alerts to Tier 2 and Tier 3 contacts.`;
+        } else {
+            descElem.innerHTML = `Currently: <b style="color: #16a34a;">Disabled (Single Alert Mode)</b>. When disabled, SOS Guardian dispatches <b>exactly ONE urgent SMS with Google Maps pin</b> to primary guardians. No repeat messages or follow-up texts will be sent.`;
+        }
+    }
+
+    if (toggleEscalation) {
+        const saved = localStorage.getItem("sos_auto_escalation");
+        const isEnabled = (saved === "true");
+        toggleEscalation.checked = isEnabled;
+        updateEscalationDesc(isEnabled);
+
+        toggleEscalation.addEventListener("change", () => {
+            const val = toggleEscalation.checked;
+            localStorage.setItem("sos_auto_escalation", val ? "true" : "false");
+            updateEscalationDesc(val);
+        });
+    }
+}
+
+// Initialize tabs on startup
+if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", setupDashboardTabs);
+} else {
+    setupDashboardTabs();
+}
