@@ -1,0 +1,1250 @@
+from gesture_detector import detect_hand
+
+from flask import Flask, jsonify, render_template, request, session
+from flask_cors import CORS
+
+from werkzeug.security import (
+    generate_password_hash,
+    check_password_hash
+)
+
+from functools import wraps
+
+
+from database import (
+    initialize_database,
+    create_user,
+    get_user_by_email,
+    get_user_by_id,
+    update_permissions,
+    get_contacts,
+    add_contact,
+    delete_contact,
+    create_sos_event,
+    get_sos_events,
+)
+
+from notifications import notification_service
+
+
+# ============================================================
+# APPLICATION CONFIGURATION
+# ============================================================
+
+app = Flask(
+    __name__,
+    template_folder="../templates",
+    static_folder="../static",
+    static_url_path="/static"
+)
+
+app.secret_key = "SOS_GUARDIAN_CHANGE_THIS_SECRET_KEY"
+
+CORS(app)
+
+
+# ============================================================
+# AUTHENTICATION HELPERS
+# ============================================================
+
+def login_required(function):
+
+    @wraps(function)
+    def wrapper(*args, **kwargs):
+
+        if "user_id" not in session:
+
+            return jsonify({
+                "success": False,
+                "message": "Authentication required"
+            }), 401
+
+        return function(*args, **kwargs)
+
+    return wrapper
+
+
+def current_user():
+
+    user_id = session.get("user_id")
+
+    if not user_id:
+        return None
+
+    return get_user_by_id(user_id)
+
+
+# ============================================================
+# HOME
+# ============================================================
+
+@app.route("/")
+def home():
+
+    return render_template("index.html")
+
+
+# ============================================================
+# HEALTH CHECK
+# ============================================================
+
+@app.route("/api/health", methods=["GET"])
+def health():
+
+    return jsonify({
+        "success": True,
+        "status": "healthy",
+        "service": "SOS Guardian"
+    })
+
+
+# ============================================================
+# HAND GESTURE DETECTION
+# ============================================================
+
+@app.route(
+    "/api/gesture/detect",
+    methods=["POST"]
+)
+@login_required
+def detect_gesture():
+
+    try:
+
+        if "image" not in request.files:
+
+            return jsonify({
+                "success": False,
+                "message": "No image received"
+            }), 400
+
+
+        image_file = request.files["image"]
+
+        image_bytes = image_file.read()
+
+
+        if not image_bytes:
+
+            return jsonify({
+                "success": False,
+                "message": "Empty image received"
+            }), 400
+
+
+        result = detect_hand(
+            image_bytes
+        )
+
+
+        return jsonify(result)
+
+
+    except Exception as error:
+
+        print(
+            f"Gesture API error: {error}"
+        )
+
+
+        return jsonify({
+            "success": False,
+            "message": str(error)
+        }), 500
+
+
+# ============================================================
+# REGISTER
+# ============================================================
+
+@app.route(
+    "/api/auth/register",
+    methods=["POST"]
+)
+def register():
+
+    try:
+
+        data = request.get_json() or {}
+
+
+        name = data.get(
+            "name",
+            ""
+        ).strip()
+
+
+        email = data.get(
+            "email",
+            ""
+        ).strip().lower()
+
+
+        password = data.get(
+            "password",
+            ""
+        )
+
+
+        # ----------------------------------------------------
+        # VALIDATION
+        # ----------------------------------------------------
+
+        if not name:
+
+            return jsonify({
+                "success": False,
+                "message": "Name is required"
+            }), 400
+
+
+        if not email:
+
+            return jsonify({
+                "success": False,
+                "message": "Email is required"
+            }), 400
+
+
+        if "@" not in email:
+
+            return jsonify({
+                "success": False,
+                "message": "Enter a valid email address"
+            }), 400
+
+
+        if len(password) < 6:
+
+            return jsonify({
+                "success": False,
+                "message":
+                    "Password must contain at least 6 characters"
+            }), 400
+
+
+        # ----------------------------------------------------
+        # CHECK EXISTING USER
+        # ----------------------------------------------------
+
+        existing_user = get_user_by_email(
+            email
+        )
+
+
+        if existing_user:
+
+            return jsonify({
+                "success": False,
+                "message":
+                    "An account with this email already exists"
+            }), 409
+
+
+        # ----------------------------------------------------
+        # HASH PASSWORD
+        # ----------------------------------------------------
+
+        password_hash = generate_password_hash(
+            password
+        )
+
+
+        # ----------------------------------------------------
+        # CREATE USER
+        # ----------------------------------------------------
+
+        user_id = create_user(
+            name,
+            email,
+            password_hash
+        )
+
+
+        # ----------------------------------------------------
+        # CREATE SESSION
+        # ----------------------------------------------------
+
+        session["user_id"] = user_id
+
+
+        return jsonify({
+
+            "success": True,
+
+            "message":
+                "Account created successfully",
+
+            "user": {
+
+                "id": user_id,
+
+                "name": name,
+
+                "email": email,
+
+                "protection_enabled": False
+            }
+
+        }), 201
+
+
+    except Exception as error:
+
+        print(
+            f"Registration error: {error}"
+        )
+
+
+        return jsonify({
+
+            "success": False,
+
+            "message":
+                "Failed to create account"
+
+        }), 500
+
+
+# ============================================================
+# LOGIN
+# ============================================================
+
+@app.route(
+    "/api/auth/login",
+    methods=["POST"]
+)
+def login():
+
+    try:
+
+        data = request.get_json() or {}
+
+
+        email = data.get(
+            "email",
+            ""
+        ).strip().lower()
+
+
+        password = data.get(
+            "password",
+            ""
+        )
+
+
+        # ----------------------------------------------------
+        # VALIDATION
+        # ----------------------------------------------------
+
+        if not email or not password:
+
+            return jsonify({
+
+                "success": False,
+
+                "message":
+                    "Email and password are required"
+
+            }), 400
+
+
+        # ----------------------------------------------------
+        # FIND USER
+        # ----------------------------------------------------
+
+        user = get_user_by_email(
+            email
+        )
+
+
+        if not user:
+
+            return jsonify({
+
+                "success": False,
+
+                "message":
+                    "Invalid email or password"
+
+            }), 401
+
+
+        # ----------------------------------------------------
+        # CHECK PASSWORD
+        # ----------------------------------------------------
+
+        if not check_password_hash(
+
+            user["password_hash"],
+
+            password
+
+        ):
+
+            return jsonify({
+
+                "success": False,
+
+                "message":
+                    "Invalid email or password"
+
+            }), 401
+
+
+        # ----------------------------------------------------
+        # CREATE SESSION
+        # ----------------------------------------------------
+
+        session["user_id"] = user["id"]
+
+
+        return jsonify({
+
+            "success": True,
+
+            "message":
+                "Login successful",
+
+            "user": {
+
+                "id":
+                    user["id"],
+
+                "name":
+                    user["name"],
+
+                "email":
+                    user["email"],
+
+                "protection_enabled":
+                    bool(
+                        user["protection_enabled"]
+                    )
+            }
+
+        })
+
+
+    except Exception as error:
+
+        print(
+            f"Login error: {error}"
+        )
+
+
+        return jsonify({
+
+            "success": False,
+
+            "message":
+                "Login failed"
+
+        }), 500
+
+
+# ============================================================
+# LOGOUT
+# ============================================================
+
+@app.route(
+    "/api/auth/logout",
+    methods=["POST"]
+)
+def logout():
+
+    session.clear()
+
+
+    return jsonify({
+
+        "success": True,
+
+        "message":
+            "Logged out successfully"
+
+    })
+
+
+# ============================================================
+# CURRENT USER
+# ============================================================
+
+@app.route(
+    "/api/auth/me",
+    methods=["GET"]
+)
+def get_current_user():
+
+    user = current_user()
+
+
+    if not user:
+
+        return jsonify({
+
+            "success": False,
+
+            "authenticated": False
+
+        }), 401
+
+
+    return jsonify({
+
+        "success": True,
+
+        "authenticated": True,
+
+        "user": {
+
+            "id":
+                user["id"],
+
+            "name":
+                user["name"],
+
+            "email":
+                user["email"],
+
+            "protection_enabled":
+                bool(
+                    user["protection_enabled"]
+                )
+        }
+
+    })
+
+
+# ============================================================
+# SAVE PERMISSIONS
+# ============================================================
+
+@app.route(
+    "/api/auth/permissions",
+    methods=["POST"]
+)
+@login_required
+def save_permissions():
+
+    try:
+
+        data = request.get_json() or {}
+
+
+        camera = bool(
+            data.get(
+                "camera_permission",
+                False
+            )
+        )
+
+
+        microphone = bool(
+            data.get(
+                "microphone_permission",
+                False
+            )
+        )
+
+
+        location = bool(
+            data.get(
+                "location_permission",
+                False
+            )
+        )
+
+
+        update_permissions(
+
+            session["user_id"],
+
+            camera,
+
+            microphone,
+
+            location
+        )
+
+
+        user = get_user_by_id(
+            session["user_id"]
+        )
+
+
+        return jsonify({
+
+            "success": True,
+
+            "message":
+                "Emergency protection settings saved",
+
+            "protection_enabled":
+                bool(
+                    user["protection_enabled"]
+                )
+
+        })
+
+
+    except Exception as error:
+
+        print(
+            f"Permission error: {error}"
+        )
+
+
+        return jsonify({
+
+            "success": False,
+
+            "message":
+                "Failed to save protection settings"
+
+        }), 500
+
+
+# ============================================================
+# EMERGENCY CONTACTS - GET
+# ============================================================
+
+@app.route(
+    "/api/contacts",
+    methods=["GET"]
+)
+@login_required
+def get_all_contacts():
+
+    try:
+
+        contacts = get_contacts(
+            session["user_id"]
+        )
+
+
+        return jsonify({
+
+            "success": True,
+
+            "contacts": contacts
+
+        })
+
+
+    except Exception as error:
+
+        print(
+            f"Error loading contacts: {error}"
+        )
+
+
+        return jsonify({
+
+            "success": False,
+
+            "message":
+                "Failed to load emergency contacts"
+
+        }), 500
+
+
+# ============================================================
+# EMERGENCY CONTACTS - ADD
+# ============================================================
+
+@app.route(
+    "/api/contacts",
+    methods=["POST"]
+)
+@login_required
+def create_contact():
+
+    try:
+
+        data = request.get_json() or {}
+
+
+        name = data.get(
+            "name",
+            ""
+        ).strip()
+
+
+        phone = data.get(
+            "phone",
+            ""
+        ).strip()
+
+
+        if not name:
+
+            return jsonify({
+
+                "success": False,
+
+                "message":
+                    "Contact name is required"
+
+            }), 400
+
+
+        if not phone:
+
+            return jsonify({
+
+                "success": False,
+
+                "message":
+                    "Phone number is required"
+
+            }), 400
+
+
+        contact_id = add_contact(
+
+            session["user_id"],
+
+            name,
+
+            phone
+        )
+
+
+        return jsonify({
+
+            "success": True,
+
+            "message":
+                "Emergency contact added successfully",
+
+            "contact": {
+
+                "id":
+                    contact_id,
+
+                "name":
+                    name,
+
+                "phone":
+                    phone
+
+            }
+
+        }), 201
+
+
+    except Exception as error:
+
+        print(
+            f"Error creating contact: {error}"
+        )
+
+
+        return jsonify({
+
+            "success": False,
+
+            "message":
+                "Failed to create emergency contact"
+
+        }), 500
+
+
+# ============================================================
+# EMERGENCY CONTACTS - DELETE
+# ============================================================
+
+@app.route(
+    "/api/contacts/<int:contact_id>",
+    methods=["DELETE"]
+)
+@login_required
+def remove_contact(
+    contact_id
+):
+
+    try:
+
+        deleted = delete_contact(
+
+            session["user_id"],
+
+            contact_id
+        )
+
+
+        if not deleted:
+
+            return jsonify({
+
+                "success": False,
+
+                "message":
+                    "Contact not found"
+
+            }), 404
+
+
+        return jsonify({
+
+            "success": True,
+
+            "message":
+                "Contact deleted successfully"
+
+        })
+
+
+    except Exception as error:
+
+        print(
+            f"Delete contact error: {error}"
+        )
+
+
+        return jsonify({
+
+            "success": False,
+
+            "message":
+                "Failed to delete contact"
+
+        }), 500
+
+
+# ============================================================
+# SOS
+# ============================================================
+
+@app.route(
+    "/api/sos",
+    methods=["POST"]
+)
+@login_required
+def sos():
+
+    try:
+
+        data = request.get_json() or {}
+
+
+        latitude = data.get(
+            "latitude"
+        )
+
+
+        longitude = data.get(
+            "longitude"
+        )
+
+
+        # ----------------------------------------------------
+        # LOCATION VALIDATION
+        # ----------------------------------------------------
+
+        if (
+            latitude is None
+            or longitude is None
+        ):
+
+            return jsonify({
+
+                "success": False,
+
+                "message":
+                    "Latitude and longitude are required"
+
+            }), 400
+
+
+        try:
+
+            latitude = float(
+                latitude
+            )
+
+            longitude = float(
+                longitude
+            )
+
+        except (
+            ValueError,
+            TypeError
+        ):
+
+            return jsonify({
+
+                "success": False,
+
+                "message":
+                    "Invalid latitude or longitude"
+
+            }), 400
+
+
+        if not -90 <= latitude <= 90:
+
+            return jsonify({
+
+                "success": False,
+
+                "message":
+                    "Invalid latitude"
+
+            }), 400
+
+
+        if not -180 <= longitude <= 180:
+
+            return jsonify({
+
+                "success": False,
+
+                "message":
+                    "Invalid longitude"
+
+            }), 400
+
+
+        # ----------------------------------------------------
+        # TRIGGER TYPE
+        # ----------------------------------------------------
+
+        trigger_type = data.get(
+            "trigger_type",
+            "button"
+        )
+
+
+        # ----------------------------------------------------
+        # GOOGLE MAPS URL
+        # ----------------------------------------------------
+
+        maps_url = (
+            "https://www.google.com/maps?q="
+            f"{latitude},{longitude}"
+        )
+
+
+        status = "received"
+
+
+        # ----------------------------------------------------
+        # SAVE SOS EVENT
+        # ----------------------------------------------------
+
+        event_id = create_sos_event(
+
+            session["user_id"],
+
+            latitude,
+
+            longitude,
+
+            maps_url,
+
+            trigger_type,
+
+            status
+        )
+
+
+        # ----------------------------------------------------
+        # GET EMERGENCY CONTACTS
+        # ----------------------------------------------------
+
+        contacts = get_contacts(
+
+            session["user_id"]
+        )
+
+
+        # ----------------------------------------------------
+        # SMS MESSAGE
+        # ----------------------------------------------------
+
+        message = (
+
+            "🚨 SOS EMERGENCY ALERT!\n\n"
+
+            "An emergency SOS has been activated.\n\n"
+
+            f"📍 Location:\n{maps_url}\n\n"
+
+            "Please check on the person immediately."
+        )
+
+
+        notification_results = []
+
+
+        # ----------------------------------------------------
+        # SEND NOTIFICATIONS
+        # ----------------------------------------------------
+
+        for contact in contacts:
+
+            try:
+
+                result = (
+                    notification_service.send_sms(
+
+                        contact["phone"],
+
+                        message
+                    )
+                )
+
+
+                notification_results.append({
+
+                    "contact_id":
+                        contact["id"],
+
+                    "name":
+                        contact["name"],
+
+                    "phone":
+                        contact["phone"],
+
+                    "success":
+                        result.get(
+                            "success",
+                            False
+                        )
+                })
+
+
+            except Exception as notification_error:
+
+                print(
+                    "Notification error:",
+                    notification_error
+                )
+
+
+                notification_results.append({
+
+                    "contact_id":
+                        contact["id"],
+
+                    "name":
+                        contact["name"],
+
+                    "phone":
+                        contact["phone"],
+
+                    "success":
+                        False
+                })
+
+
+        # ----------------------------------------------------
+        # UPDATE STATUS
+        # ----------------------------------------------------
+
+        if contacts:
+
+            status = "notification_sent"
+
+        else:
+
+            status = "no_contacts"
+
+
+        # ----------------------------------------------------
+        # SERVER LOG
+        # ----------------------------------------------------
+
+        print()
+
+        print("=" * 50)
+
+        print(
+            "🚨 SOS PROCESSING COMPLETE"
+        )
+
+        print("=" * 50)
+
+        print(
+            f"🆔 Event ID : {event_id}"
+        )
+
+        print(
+            f"📍 Latitude : {latitude}"
+        )
+
+        print(
+            f"📍 Longitude: {longitude}"
+        )
+
+        print(
+            f"🗺️ Maps     : {maps_url}"
+        )
+
+        print(
+            f"⚡ Trigger  : {trigger_type}"
+        )
+
+        print(
+            f"👥 Contacts : {len(contacts)}"
+        )
+
+        print(
+            f"📊 Status   : {status}"
+        )
+
+        print("=" * 50)
+
+        print()
+
+
+        return jsonify({
+
+            "success": True,
+
+            "message":
+                "SOS processed successfully",
+
+            "event": {
+
+                "id":
+                    event_id,
+
+                "latitude":
+                    latitude,
+
+                "longitude":
+                    longitude,
+
+                "maps_url":
+                    maps_url,
+
+                "trigger_type":
+                    trigger_type,
+
+                "status":
+                    status
+            },
+
+            "notifications": {
+
+                "total_contacts":
+                    len(contacts),
+
+                "results":
+                    notification_results
+            }
+
+        }), 200
+
+
+    except Exception as error:
+
+        print(
+            f"SOS ERROR: {error}"
+        )
+
+
+        return jsonify({
+
+            "success": False,
+
+            "message":
+                "Failed to process SOS request"
+
+        }), 500
+
+
+# ============================================================
+# SOS HISTORY
+# ============================================================
+
+@app.route(
+    "/api/sos/history",
+    methods=["GET"]
+)
+@login_required
+def sos_history():
+
+    try:
+
+        events = get_sos_events(
+
+            session["user_id"]
+        )
+
+
+        return jsonify({
+
+            "success": True,
+
+            "count":
+                len(events),
+
+            "events":
+                events
+
+        })
+
+
+    except Exception as error:
+
+        print(
+            f"Error loading SOS history: {error}"
+        )
+
+
+        return jsonify({
+
+            "success": False,
+
+            "message":
+                "Failed to load SOS history"
+
+        }), 500
+
+
+# ============================================================
+# START SERVER
+# ============================================================
+
+if __name__ == "__main__":
+
+    print("=" * 50)
+
+    print("🛡️ SOS GUARDIAN")
+
+    print("=" * 50)
+
+
+    print(
+        "Initializing database..."
+    )
+
+
+    initialize_database()
+
+
+    print(
+        "✅ Database ready"
+    )
+
+
+    print(
+        "🚀 Starting Flask server..."
+    )
+
+
+    print("=" * 50)
+
+
+    app.run(
+
+        host="0.0.0.0",
+
+        port=5000,
+
+        debug=True
+    )
