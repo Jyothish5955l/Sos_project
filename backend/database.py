@@ -30,6 +30,8 @@ def get_connection():
 
     connection.row_factory = sqlite3.Row
 
+    connection.execute("PRAGMA foreign_keys = ON;")
+
     return connection
 
 
@@ -87,6 +89,8 @@ def initialize_database():
 
             phone TEXT NOT NULL,
 
+            telegram_chat_id TEXT,
+
             created_at TIMESTAMP
                 DEFAULT CURRENT_TIMESTAMP,
 
@@ -107,11 +111,11 @@ def initialize_database():
 
             user_id INTEGER,
 
-            latitude REAL NOT NULL,
+            latitude REAL,
 
-            longitude REAL NOT NULL,
+            longitude REAL,
 
-            maps_url TEXT NOT NULL,
+            maps_url TEXT,
 
             trigger_type TEXT NOT NULL,
 
@@ -151,9 +155,7 @@ def initialize_database():
     # DATABASE MIGRATION
     # --------------------------------------------------------
 
-    # Older versions of your project created contacts/events
-    # without user_id. Add the column if it doesn't exist.
-
+    # Add columns if they do not exist
     cursor.execute("""
         PRAGMA table_info(emergency_contacts)
     """)
@@ -170,14 +172,23 @@ def initialize_database():
             ADD COLUMN user_id INTEGER
         """)
 
+    if "telegram_chat_id" not in contact_columns:
+
+        cursor.execute("""
+            ALTER TABLE emergency_contacts
+            ADD COLUMN telegram_chat_id TEXT
+        """)
+
 
     cursor.execute("""
         PRAGMA table_info(sos_events)
     """)
 
+    sos_table_info = cursor.fetchall()
+
     sos_columns = [
         column["name"]
-        for column in cursor.fetchall()
+        for column in sos_table_info
     ]
 
     if "user_id" not in sos_columns:
@@ -186,6 +197,30 @@ def initialize_database():
             ALTER TABLE sos_events
             ADD COLUMN user_id INTEGER
         """)
+
+    # Check if latitude has NOT NULL constraint and migrate if needed
+    lat_col = next((c for c in sos_table_info if c["name"] == "latitude"), None)
+    if lat_col and lat_col["notnull"] == 1:
+        cursor.execute("ALTER TABLE sos_events RENAME TO sos_events_old")
+        cursor.execute("""
+            CREATE TABLE sos_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                latitude REAL,
+                longitude REAL,
+                maps_url TEXT,
+                trigger_type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+        cursor.execute("""
+            INSERT INTO sos_events (id, user_id, latitude, longitude, maps_url, trigger_type, status, created_at)
+            SELECT id, user_id, latitude, longitude, maps_url, trigger_type, status, created_at
+            FROM sos_events_old
+        """)
+        cursor.execute("DROP TABLE sos_events_old")
 
 
     connection.commit()
@@ -366,6 +401,7 @@ def get_contacts(user_id):
             id,
             name,
             phone,
+            telegram_chat_id,
             created_at
 
         FROM emergency_contacts
@@ -390,7 +426,8 @@ def get_contacts(user_id):
 def add_contact(
     user_id,
     name,
-    phone
+    phone,
+    telegram_chat_id=None
 ):
 
     connection = get_connection()
@@ -401,14 +438,16 @@ def add_contact(
         INSERT INTO emergency_contacts (
             user_id,
             name,
-            phone
+            phone,
+            telegram_chat_id
         )
 
-        VALUES (?, ?, ?)
+        VALUES (?, ?, ?, ?)
     """, (
         user_id,
         name,
-        phone
+        phone,
+        telegram_chat_id
     ))
 
     connection.commit()

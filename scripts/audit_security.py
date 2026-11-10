@@ -52,3 +52,4 @@ if len(users) >= 2:
         target_id = u1_contacts[0]['id']
         del_res = client.delete(f'/api/contacts/{target_id}')
         print(f"User {u2_id} attempting to delete User {u1_id}'s contact (id={target_id}): Status {del_res.status_code}, Body: {del_res.get_json()}")
+

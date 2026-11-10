@@ -1,25 +1,25 @@
 ---
 milestone: SOS Guardian Core Delivery
 version: 1.0.0
-updated: 2026-11-10T09:30:00+05:30
+updated: 2026-11-10T09:42:00+05:30
 ---
 
 # Roadmap — SOS Guardian
 
-> **Current Phase:** Phase 1 — Existing Project Audit & Codebase Health  
-> **Status:** Completed Phase 1 Audit (Awaiting User Approval for Phase 2)  
+> **Current Phase:** Phase 2 — Core System Stabilization  
+> **Status:** Completed Phase 2 (Awaiting User Approval for Phase 3)  
 > **Approval Protocol:** Strict phase-by-phase execution control. Do NOT advance without explicit user approval (`APPROVE PHASE [N]`).
 
 ---
 
 ## Must-Haves (from SPEC.md)
 
-- [ ] Multi-modal SOS triggers: Manual, Open-Palm Gesture (browser MediaPipe), Voice commands (Web Speech API).
-- [ ] 5-second countdown with visual/audio abort on all triggers.
-- [ ] Robust GPS acquisition with fallback for missing/denied location.
-- [ ] Atomic SQLite emergency event persistence with foreign key constraints.
-- [ ] Emergency notification dispatch to Telegram Bot API with location maps link and provider status tracking.
-- [ ] Secure user authentication and complete user data isolation.
+- [x] Multi-modal SOS triggers: Manual, Open-Palm Gesture (browser MediaPipe), Voice commands (Web Speech API - Phase 3).
+- [x] 5-second countdown with visual/audio abort on all triggers.
+- [x] Robust GPS acquisition with fallback for missing/denied location (Tested & Verified).
+- [x] Atomic SQLite emergency event persistence with foreign key constraints (Tested & Verified).
+- [ ] Emergency notification dispatch to Telegram Bot API with location maps link and provider status tracking (Phase 4).
+- [ ] Secure user authentication and complete user data isolation (Phase 5).
 
 ---
 
@@ -32,36 +32,27 @@ updated: 2026-11-10T09:30:00+05:30
 ---
 
 ### Phase 1: Existing Project Audit & Codebase Health
-**Status:** 🔄 Completed (Awaiting Approval to proceed to Phase 2)  
-**Objective:** In-depth audit of extracted codebase (`backend/app.py`, `backend/database.py`, `backend/gesture_detector.py`, `backend/notifications.py`, `static/app.js`, `templates/index.html`). Catalog syntax errors, architectural misalignments (e.g. server-side vs client-side gesture detection), database schema gaps, dependency requirements, and test baseline.  
-**Deliverables:**
-- [x] Static analysis and syntax audit across Python backend and JS frontend.
-- [x] Identified fatal import crash in `backend/app.py` (`from gesture_detector import detect_hand` -> missing `cv2`/`mediapipe`/`numpy`).
-- [x] Audited database schema, migration handling, foreign keys, and `NOT NULL` coordinate constraints.
-- [x] Audited MediaPipe loading in `static/app.js`: discovered version mismatch (`0.10.21` bundle vs `0.10.22` wasm), missing GPU-to-CPU fallback, and brittle palm stability logic.
-- [x] Audited GPS and Manual SOS flow: discovered hard abort in both frontend and backend when coordinates are unavailable.
-- [x] Audited notification services: discovered missing Telegram integration, empty SMS provider, and non-functional FCM stub.
-- [x] Audited security: hardcoded secret key, orphaned database records, and open CORS.
-- [x] Compiled Phase 1 audit report in `PHASE_REPORT.md`.
+**Status:** ✅ Complete (Approved)  
+**Objective:** In-depth audit of extracted codebase (`backend/app.py`, `backend/database.py`, `backend/gesture_detector.py`, `backend/notifications.py`, `static/app.js`, `templates/index.html`). Catalog syntax errors, architectural misalignments, database schema gaps, and dependency requirements.
 
 ---
 
 ### Phase 2: Core System Stabilization
-**Status:** ⬜ Not Started (Awaiting Phase 1 Approval)  
+**Status:** 🔄 Completed (Awaiting Approval to proceed to Phase 3)  
 **Objective:** Stabilize Manual SOS, GPS handling, SQLite database event recording, and implement reliable client-side MediaPipe Open-Palm gesture detection with stability and cooldown mechanisms.  
-**Depends on:** Phase 1 approval.  
-**Planned Tasks:**
-- Task 2.1: Fix backend startup (decouple unused `gesture_detector.py` from `app.py`).
-- Task 2.2: Make GPS coordinate payload resilient in frontend (`static/app.js`) and backend (`backend/app.py`), allowing emergency activation without coordinates.
-- Task 2.3: Migrate SQLite database schema to allow nullable `latitude`, `longitude`, `maps_url` in `sos_events` and add `telegram_chat_id` in `emergency_contacts`.
-- Task 2.4: Fix client-side MediaPipe HandLandmarker initialization: align CDN and WASM versions (`0.10.21`), add CPU delegate fallback, improve palm geometry detection, and implement a temporal smoothing buffer (debounce) for the 2-second stability hold.
-- Task 2.5: Automated & manual test verification of manual SOS and gesture detection.
+**Deliverables:**
+- [x] Fixed backend startup crash: decoupled unused OpenCV/MediaPipe imports from `backend/app.py` line 1.
+- [x] Resilient GPS handling: frontend (`static/app.js`) and backend (`backend/app.py`) now support emergency activation without GPS (timeout guard, graceful fallback, location_available flag).
+- [x] Database migration: `sos_events` migrated to allow nullable coordinates (`latitude`, `longitude`, `maps_url`), `emergency_contacts` enhanced with `telegram_chat_id`, and `PRAGMA foreign_keys = ON;` enforced.
+- [x] Re-engineered client-side MediaPipe HandLandmarker: pinned matching CDN/WASM versions (`@0.10.21`), automatic CPU delegate fallback, robust 5-digit palm geometry algorithm, and 350ms temporal debouncing buffer.
+- [x] Created automated test suites: `tests/test_phase2_backend.py` (7 tests passing) and `tests/test_gesture_math.js` (4 tests passing).
+- [x] Formatted and generated `PHASE_REPORT.md` for Phase 2.
 
 ---
 
 ### Phase 3: Voice SOS Engine
-**Status:** ⬜ Not Started  
-**Objective:** Implement hands-free emergency voice recognition using browser Web Speech API for predefined distress commands ("SOS", "Help me", "Emergency") with false-positive protection.  
+**Status:** ⬜ Not Started (Awaiting Phase 2 Approval)  
+**Objective:** Implement hands-free emergency voice recognition using browser Web Speech API for predefined distress commands ("SOS", "Help me", "Emergency") with false-positive protection and continuous error recovery.  
 **Depends on:** Phase 2 approval.
 
 ---
@@ -99,8 +90,8 @@ updated: 2026-11-10T09:30:00+05:30
 | Phase | Description | Status | Complete |
 |---|---|---|---|
 | **Phase 0** | Project Setup & Architecture Planning | ✅ Complete | 100% |
-| **Phase 1** | Existing Project Audit & Codebase Health | 🔄 Completed (Review) | 100% |
-| **Phase 2** | Core System Stabilization | ⬜ Not Started | 0% |
+| **Phase 1** | Existing Project Audit & Codebase Health | ✅ Complete | 100% |
+| **Phase 2** | Core System Stabilization | 🔄 Completed (Review) | 100% |
 | **Phase 3** | Voice SOS Engine | ⬜ Not Started | 0% |
 | **Phase 4** | Emergency Notification Delivery | ⬜ Not Started | 0% |
 | **Phase 5** | Security Hardening & UI/UX Polish | ⬜ Not Started | 0% |

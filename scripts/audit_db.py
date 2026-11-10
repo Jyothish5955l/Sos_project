@@ -23,3 +23,4 @@ for t in tables:
     print(f"  Row count: {cursor.fetchone()[0]}")
 
 conn.close()
+

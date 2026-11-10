@@ -22,6 +22,8 @@ let cameraStream = null;
 let lastVideoTime = -1;
 
 let palmStartTime = null;
+let palmLastSeenTime = null;
+let lastDetectionTimestamp = 0;
 
 let gestureSosTriggered = false;
 
@@ -823,7 +825,6 @@ async function initializeHandLandmarker() {
             "gestureStatus"
         );
 
-
     try {
 
         if (status) {
@@ -832,76 +833,95 @@ async function initializeHandLandmarker() {
                 "Loading hand AI...";
         }
 
-
+        // Align exact version with vision_bundle.mjs (0.10.21)
         const vision =
             await window
                 .FilesetResolver
                 .forVisionTasks(
-                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm"
+                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/wasm"
                 );
 
+        const modelAssetPath =
+            "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
 
-        handLandmarker =
-            await window
-                .HandLandmarker
-                .createFromOptions(
-                    vision,
-                    {
+        // Attempt GPU delegate first, with automatic fallback to CPU
+        try {
 
-                        baseOptions: {
+            handLandmarker =
+                await window
+                    .HandLandmarker
+                    .createFromOptions(
+                        vision,
+                        {
+                            baseOptions: {
+                                modelAssetPath,
+                                delegate: "GPU"
+                            },
+                            runningMode: "VIDEO",
+                            numHands: 1,
+                            minHandDetectionConfidence: 0.40,
+                            minHandPresenceConfidence: 0.40,
+                            minTrackingConfidence: 0.40
+                        }
+                    );
 
-                            modelAssetPath:
-                                "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+            if (status) {
 
-                            delegate:
-                                "GPU"
-                        },
+                status.textContent =
+                    "Hand AI Ready (GPU)";
 
-
-                        runningMode:
-                            "VIDEO",
-
-
-                        numHands:
-                            1,
-
-
-                        minHandDetectionConfidence:
-                            0.45,
-
-
-                        minHandPresenceConfidence:
-                            0.45,
-
-
-                        minTrackingConfidence:
-                            0.45
-                    }
+                status.classList.add(
+                    "active"
                 );
+            }
 
+        } catch (gpuError) {
 
-        if (status) {
-
-            status.textContent =
-                "Hand AI Ready";
-
-            status.classList.add(
-                "active"
+            console.warn(
+                "GPU delegate failed; falling back to CPU:",
+                gpuError
             );
+
+            handLandmarker =
+                await window
+                    .HandLandmarker
+                    .createFromOptions(
+                        vision,
+                        {
+                            baseOptions: {
+                                modelAssetPath,
+                                delegate: "CPU"
+                            },
+                            runningMode: "VIDEO",
+                            numHands: 1,
+                            minHandDetectionConfidence: 0.40,
+                            minHandPresenceConfidence: 0.40,
+                            minTrackingConfidence: 0.40
+                        }
+                    );
+
+            if (status) {
+
+                status.textContent =
+                    "Hand AI Ready (CPU)";
+
+                status.classList.add(
+                    "active"
+                );
+            }
         }
 
     } catch (error) {
 
         console.error(
-            "Hand landmarker error:",
+            "Hand landmarker initialization error:",
             error
         );
-
 
         if (status) {
 
             status.textContent =
-                "Hand AI failed";
+                `Hand AI failed: ${error.message || "Network error"}`;
         }
     }
 }
@@ -1033,6 +1053,7 @@ function angle(a, b, c) {
 
 function fingerOpen(
     landmarks,
+    mcp,
     pip,
     dip,
     tip
@@ -1041,29 +1062,27 @@ function fingerOpen(
     const wrist =
         landmarks[0];
 
+    const tipDist =
+        distance(landmarks[tip], wrist);
 
-    return (
+    const pipDist =
+        distance(landmarks[pip], wrist);
 
-        distance(
-            landmarks[tip],
-            wrist
-        )
+    const mcpDist =
+        distance(landmarks[mcp], wrist);
 
-        >
+    const isExtended =
+        tipDist > pipDist * 1.05 &&
+        pipDist > mcpDist * 0.95;
 
-        distance(
-            landmarks[pip],
-            wrist
-        ) * 1.05
-
-        &&
-
+    const jointAngle =
         angle(
             landmarks[pip],
             landmarks[dip],
             landmarks[tip]
-        ) > 145
-    );
+        );
+
+    return isExtended && jointAngle > 125;
 }
 
 
@@ -1074,29 +1093,49 @@ function thumbOpen(
     const wrist =
         landmarks[0];
 
+    const thumbTip =
+        landmarks[4];
 
-    return (
+    const thumbIP =
+        landmarks[3];
 
-        distance(
-            landmarks[4],
-            wrist
-        )
+    const thumbMCP =
+        landmarks[2];
 
-        >
+    const indexMCP =
+        landmarks[5];
 
-        distance(
-            landmarks[3],
-            wrist
-        ) * 1.03
+    const pinkyMCP =
+        landmarks[17];
 
-        &&
+    const tipToPinky =
+        distance(thumbTip, pinkyMCP);
 
-        angle(
-            landmarks[2],
-            landmarks[3],
-            landmarks[4]
-        ) > 145
-    );
+    const ipToPinky =
+        distance(thumbIP, pinkyMCP);
+
+    const tipToIndex =
+        distance(thumbTip, indexMCP);
+
+    const mcpToIndex =
+        distance(thumbMCP, indexMCP);
+
+    const tipToWrist =
+        distance(thumbTip, wrist);
+
+    const ipToWrist =
+        distance(thumbIP, wrist);
+
+    const isAbducted =
+        tipToPinky > ipToPinky * 0.98;
+
+    const isSeparated =
+        tipToIndex > mcpToIndex * 1.1;
+
+    const isNotCurled =
+        tipToWrist > ipToWrist * 0.95;
+
+    return isAbducted && (isSeparated || isNotCurled);
 }
 
 
@@ -1110,57 +1149,26 @@ function detectOpenPalm(
     ) {
 
         return {
-
             detected: false,
-
             fingers: 0,
-
             thumb: false
         };
     }
 
-
     const index =
-        fingerOpen(
-            landmarks,
-            6,
-            7,
-            8
-        );
-
+        fingerOpen(landmarks, 5, 6, 7, 8);
 
     const middle =
-        fingerOpen(
-            landmarks,
-            10,
-            11,
-            12
-        );
-
+        fingerOpen(landmarks, 9, 10, 11, 12);
 
     const ring =
-        fingerOpen(
-            landmarks,
-            14,
-            15,
-            16
-        );
-
+        fingerOpen(landmarks, 13, 14, 15, 16);
 
     const pinky =
-        fingerOpen(
-            landmarks,
-            18,
-            19,
-            20
-        );
-
+        fingerOpen(landmarks, 17, 18, 19, 20);
 
     const thumb =
-        thumbOpen(
-            landmarks
-        );
-
+        thumbOpen(landmarks);
 
     const fingers =
         [
@@ -1172,15 +1180,11 @@ function detectOpenPalm(
         .filter(Boolean)
         .length;
 
-
     return {
-
         detected:
             fingers === 4 &&
             thumb,
-
         fingers,
-
         thumb
     };
 }
@@ -1201,7 +1205,8 @@ async function processGestureFrame() {
     if (
         !handLandmarker ||
         !video ||
-        video.readyState < 2
+        video.readyState < 2 ||
+        video.videoWidth === 0
     ) {
 
         requestAnimationFrame(
@@ -1223,11 +1228,21 @@ async function processGestureFrame() {
 
         try {
 
+            let timestamp =
+                performance.now();
+
+            if (timestamp <= lastDetectionTimestamp) {
+                timestamp = lastDetectionTimestamp + 1;
+            }
+
+            lastDetectionTimestamp =
+                timestamp;
+
             const results =
                 handLandmarker
                     .detectForVideo(
                         video,
-                        performance.now()
+                        timestamp
                     );
 
 
@@ -1252,7 +1267,7 @@ async function processGestureFrame() {
 
 
 /* ============================================================
-   HANDLE HAND GESTURE
+   HANDLE HAND GESTURE (TEMPORAL DEBOUNCE)
    ============================================================ */
 
 function handleGestureResult(
@@ -1270,6 +1285,9 @@ function handleGestureResult(
         return;
     }
 
+    const now =
+        performance.now();
+
 
     if (
         !results ||
@@ -1277,14 +1295,23 @@ function handleGestureResult(
         !results.landmarks.length
     ) {
 
-        palmStartTime =
-            null;
+        if (
+            palmLastSeenTime &&
+            (now - palmLastSeenTime > 400)
+        ) {
 
-        text.textContent =
-            "Waiting for hand...";
+            palmStartTime =
+                null;
 
-        text.className =
-            "gesture-waiting";
+            palmLastSeenTime =
+                null;
+
+            text.textContent =
+                "Waiting for hand...";
+
+            text.className =
+                "gesture-waiting";
+        }
 
         return;
     }
@@ -1298,36 +1325,51 @@ function handleGestureResult(
 
     if (!palm.detected) {
 
-        palmStartTime =
-            null;
+        if (
+            palmLastSeenTime &&
+            (now - palmLastSeenTime > 350)
+        ) {
 
-        text.textContent =
-            `Hand detected — open palm ✋ (${palm.fingers}/4 fingers)`;
+            palmStartTime =
+                null;
 
-        text.className =
-            "gesture-waiting";
+            palmLastSeenTime =
+                null;
+
+            text.textContent =
+                `Hand detected — open palm ✋ (${palm.fingers}/4 fingers${palm.thumb ? ' + thumb' : ''})`;
+
+            text.className =
+                "gesture-waiting";
+        }
 
         return;
     }
 
 
+    palmLastSeenTime =
+        now;
+
     if (!palmStartTime) {
 
         palmStartTime =
-            performance.now();
+            now;
     }
 
 
     const held =
-        performance.now() -
+        now -
         palmStartTime;
 
 
-    text.textContent =
-        `✋ OPEN PALM — hold ${Math.min(
-            2,
+    const progressSeconds =
+        Math.min(
+            2.0,
             held / 1000
-        ).toFixed(1)} / 2.0 sec`;
+        ).toFixed(1);
+
+    text.textContent =
+        `✋ OPEN PALM — hold ${progressSeconds} / 2.0 sec`;
 
 
     text.className =
@@ -1349,6 +1391,9 @@ function handleGestureResult(
             true;
 
         palmStartTime =
+            null;
+
+        palmLastSeenTime =
             null;
 
 
@@ -1521,8 +1566,102 @@ if (cancelSosButton) {
 
 
 /* ============================================================
-   TRIGGER SOS
+   TRIGGER SOS (RESILIENT GEOLOCATION)
    ============================================================ */
+
+async function sendSosRequest(
+    latitude,
+    longitude,
+    triggerType
+) {
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/sos",
+                {
+                    method:
+                        "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body:
+                        JSON.stringify({
+                            latitude,
+                            longitude,
+                            trigger_type:
+                                triggerType
+                        })
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if (!response.ok) {
+
+            alert(
+                data.message ||
+                "SOS failed."
+            );
+
+            gestureSosTriggered =
+                false;
+
+            voiceTriggered =
+                false;
+
+            return;
+        }
+
+        const locNote =
+            data.event?.location_available
+                ? "📍 Location coordinates attached."
+                : "⚠️ Location unavailable — alert dispatched without GPS.";
+
+        alert(
+            `🚨 SOS ACTIVATED!\n\n` +
+            `Emergency event recorded.\n${locNote}`
+        );
+
+        loadHistory();
+
+        setTimeout(
+            () => {
+
+                gestureSosTriggered =
+                    false;
+
+                voiceTriggered =
+                    false;
+
+            },
+            3000
+        );
+
+    } catch (error) {
+
+        console.error(
+            "SOS Network Error:",
+            error
+        );
+
+        alert(
+            "Could not connect to SOS Guardian backend."
+        );
+
+        gestureSosTriggered =
+            false;
+
+        voiceTriggered =
+            false;
+    }
+}
+
 
 function triggerSOS(
     triggerType
@@ -1533,14 +1672,12 @@ function triggerSOS(
             "countdownModal"
         );
 
-
     if (modal) {
 
         modal.classList.add(
             "hidden"
         );
     }
-
 
     if (
         triggerType ===
@@ -1551,7 +1688,6 @@ function triggerSOS(
             Date.now() + 15000;
     }
 
-
     if (
         triggerType ===
         "voice"
@@ -1561,154 +1697,106 @@ function triggerSOS(
             false;
     }
 
-
     if (
         !navigator.geolocation
     ) {
 
-        alert(
-            "Location is unavailable."
+        console.warn(
+            "Geolocation unavailable; dispatching SOS without GPS."
         );
 
-
-        gestureSosTriggered =
-            false;
-
+        sendSosRequest(
+            null,
+            null,
+            triggerType
+        );
 
         return;
     }
 
+    let dispatched =
+        false;
+
+    const locationTimeout =
+        setTimeout(
+            () => {
+
+                if (!dispatched) {
+
+                    dispatched =
+                        true;
+
+                    console.warn(
+                        "GPS acquisition timed out; dispatching SOS without GPS."
+                    );
+
+                    sendSosRequest(
+                        null,
+                        null,
+                        triggerType
+                    );
+                }
+
+            },
+            3500
+        );
 
     navigator.geolocation
         .getCurrentPosition(
 
-            async position => {
+            position => {
 
-                const latitude =
-                    position.coords.latitude;
-
-
-                const longitude =
-                    position.coords.longitude;
-
-
-                try {
-
-                    const response =
-                        await fetch(
-                            "/api/sos",
-                            {
-                                method:
-                                    "POST",
-
-                                headers: {
-                                    "Content-Type":
-                                        "application/json"
-                                },
-
-                                body:
-                                    JSON.stringify({
-
-                                        latitude,
-
-                                        longitude,
-
-                                        trigger_type:
-                                            triggerType
-                                    })
-                            }
-                        );
-
-
-                    const data =
-                        await response.json();
-
-
-                    if (!response.ok) {
-
-                        alert(
-                            data.message ||
-                            "SOS failed."
-                        );
-
-
-                        gestureSosTriggered =
-                            false;
-
-                        voiceTriggered =
-                            false;
-
-                        return;
-                    }
-
-
-                    alert(
-                        "🚨 SOS ACTIVATED!\n\n" +
-                        "Emergency event recorded."
-                    );
-
-
-                    loadHistory();
-
-
-                    setTimeout(
-                        () => {
-
-                            gestureSosTriggered =
-                                false;
-
-                            voiceTriggered =
-                                false;
-
-                        },
-                        3000
-                    );
-
-                } catch (error) {
-
-                    console.error(
-                        error
-                    );
-
-
-                    alert(
-                        "Could not connect to SOS Guardian."
-                    );
-
-
-                    gestureSosTriggered =
-                        false;
-
-                    voiceTriggered =
-                        false;
+                if (dispatched) {
+                    return;
                 }
+
+                dispatched =
+                    true;
+
+                clearTimeout(
+                    locationTimeout
+                );
+
+                sendSosRequest(
+                    position.coords.latitude,
+                    position.coords.longitude,
+                    triggerType
+                );
             },
 
             error => {
 
-                console.error(
-                    error
+                if (dispatched) {
+                    return;
+                }
+
+                dispatched =
+                    true;
+
+                clearTimeout(
+                    locationTimeout
                 );
 
-
-                alert(
-                    "Unable to get your location."
+                console.warn(
+                    "GPS permission denied or failed:",
+                    error.message
                 );
 
-
-                gestureSosTriggered =
-                    false;
-
-                voiceTriggered =
-                    false;
+                sendSosRequest(
+                    null,
+                    null,
+                    triggerType
+                );
             },
 
             {
-
                 enableHighAccuracy:
                     true,
 
                 timeout:
+                    3000,
+
+                maximumAge:
                     10000
             }
         );
@@ -2116,6 +2204,7 @@ async function loadContacts() {
                                 ${escapeHtml(
                                     contact.phone
                                 )}
+                                ${contact.telegram_chat_id ? `<br><small style="color:#60a5fa">✈️ ${escapeHtml(contact.telegram_chat_id)}</small>` : ""}
 
                             </div>
 
@@ -2180,6 +2269,14 @@ if (contactForm) {
                     .value
                     .trim();
 
+            const telegram_chat_id =
+                (document
+                    .getElementById(
+                        "contactTelegram"
+                    )
+                    ?.value || "")
+                    .trim() || null;
+
 
             try {
 
@@ -2198,7 +2295,8 @@ if (contactForm) {
                             body:
                                 JSON.stringify({
                                     name,
-                                    phone
+                                    phone,
+                                    telegram_chat_id
                                 })
                         }
                     );
@@ -2231,6 +2329,15 @@ if (contactForm) {
                         "contactPhone"
                     )
                     .value = "";
+
+                const tgElem =
+                    document.getElementById(
+                        "contactTelegram"
+                    );
+
+                if (tgElem) {
+                    tgElem.value = "";
+                }
 
 
                 loadContacts();

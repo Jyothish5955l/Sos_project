@@ -1,4 +1,8 @@
-from gesture_detector import detect_hand
+import os
+import sys
+
+# Ensure backend directory is in sys.path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from flask import Flask, jsonify, render_template, request, session
 from flask_cors import CORS
@@ -99,7 +103,7 @@ def health():
 
 
 # ============================================================
-# HAND GESTURE DETECTION
+# HAND GESTURE DETECTION (CLIENT-SIDE TELEMETRY)
 # ============================================================
 
 @app.route(
@@ -109,48 +113,12 @@ def health():
 @login_required
 def detect_gesture():
 
-    try:
-
-        if "image" not in request.files:
-
-            return jsonify({
-                "success": False,
-                "message": "No image received"
-            }), 400
-
-
-        image_file = request.files["image"]
-
-        image_bytes = image_file.read()
-
-
-        if not image_bytes:
-
-            return jsonify({
-                "success": False,
-                "message": "Empty image received"
-            }), 400
-
-
-        result = detect_hand(
-            image_bytes
-        )
-
-
-        return jsonify(result)
-
-
-    except Exception as error:
-
-        print(
-            f"Gesture API error: {error}"
-        )
-
-
-        return jsonify({
-            "success": False,
-            "message": str(error)
-        }), 500
+    # Hand gesture recognition runs client-side in the browser via MediaPipe Tasks Vision.
+    return jsonify({
+        "success": True,
+        "message": "Client-side MediaPipe gesture detection is active.",
+        "client_side_required": True
+    }), 200
 
 
 # ============================================================
@@ -676,6 +644,13 @@ def create_contact():
             ""
         ).strip()
 
+        telegram_chat_id = (
+            data.get(
+                "telegram_chat_id",
+                ""
+            ) or ""
+        ).strip() or None
+
 
         if not name:
 
@@ -707,7 +682,9 @@ def create_contact():
 
             name,
 
-            phone
+            phone,
+
+            telegram_chat_id
         )
 
 
@@ -727,7 +704,10 @@ def create_contact():
                     name,
 
                 "phone":
-                    phone
+                    phone,
+
+                "telegram_chat_id":
+                    telegram_chat_id
 
             }
 
@@ -840,71 +820,29 @@ def sos():
 
 
         # ----------------------------------------------------
-        # LOCATION VALIDATION
+        # LOCATION VALIDATION (OPTIONAL FOR EMERGENCY RESILIENCE)
         # ----------------------------------------------------
 
-        if (
-            latitude is None
-            or longitude is None
-        ):
+        has_location = False
 
-            return jsonify({
+        if latitude is not None and longitude is not None:
+            try:
+                lat_float = float(latitude)
+                lng_float = float(longitude)
 
-                "success": False,
-
-                "message":
-                    "Latitude and longitude are required"
-
-            }), 400
-
-
-        try:
-
-            latitude = float(
-                latitude
-            )
-
-            longitude = float(
-                longitude
-            )
-
-        except (
-            ValueError,
-            TypeError
-        ):
-
-            return jsonify({
-
-                "success": False,
-
-                "message":
-                    "Invalid latitude or longitude"
-
-            }), 400
-
-
-        if not -90 <= latitude <= 90:
-
-            return jsonify({
-
-                "success": False,
-
-                "message":
-                    "Invalid latitude"
-
-            }), 400
-
-
-        if not -180 <= longitude <= 180:
-
-            return jsonify({
-
-                "success": False,
-
-                "message":
-                    "Invalid longitude"
-
-            }), 400
+                if -90 <= lat_float <= 90 and -180 <= lng_float <= 180:
+                    latitude = lat_float
+                    longitude = lng_float
+                    has_location = True
+                else:
+                    latitude = None
+                    longitude = None
+            except (ValueError, TypeError):
+                latitude = None
+                longitude = None
+        else:
+            latitude = None
+            longitude = None
 
 
         # ----------------------------------------------------
@@ -913,18 +851,26 @@ def sos():
 
         trigger_type = data.get(
             "trigger_type",
-            "button"
+            "manual"
         )
+
+        if trigger_type == "button":
+            trigger_type = "manual"
 
 
         # ----------------------------------------------------
-        # GOOGLE MAPS URL
+        # GOOGLE MAPS URL & LOCATION TEXT
         # ----------------------------------------------------
 
-        maps_url = (
-            "https://www.google.com/maps?q="
-            f"{latitude},{longitude}"
-        )
+        if has_location:
+            maps_url = (
+                "https://www.google.com/maps?q="
+                f"{latitude},{longitude}"
+            )
+            location_text = f"📍 Location:\n{maps_url}"
+        else:
+            maps_url = None
+            location_text = "📍 Location: Unavailable (User GPS disabled or signal lost)"
 
 
         status = "received"
@@ -968,9 +914,9 @@ def sos():
 
             "🚨 SOS EMERGENCY ALERT!\n\n"
 
-            "An emergency SOS has been activated.\n\n"
+            f"An emergency SOS has been activated via {trigger_type}.\n\n"
 
-            f"📍 Location:\n{maps_url}\n\n"
+            f"{location_text}\n\n"
 
             "Please check on the person immediately."
         )
@@ -1125,7 +1071,10 @@ def sos():
                     trigger_type,
 
                 "status":
-                    status
+                    status,
+
+                "location_available":
+                    has_location
             },
 
             "notifications": {
