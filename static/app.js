@@ -2627,10 +2627,12 @@ async function deleteContact(
                 }
             );
 
+        const data = await response.json();
 
         if (response.ok) {
-
             loadContacts();
+        } else {
+            alert(data.message || "Failed to delete contact");
         }
 
     } catch (error) {
@@ -2638,6 +2640,7 @@ async function deleteContact(
         console.error(
             error
         );
+        alert("Error deleting contact: " + error.message);
     }
 }
 
@@ -2679,6 +2682,10 @@ async function testContactNotification(
 
                 if (s.note) {
                     msg += `   ℹ️ ${s.note}\n`;
+                }
+
+                if (s.error) {
+                    msg += `   ⚠️ ${s.error}\n`;
                 }
             }
 

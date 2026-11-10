@@ -860,19 +860,15 @@ def create_contact():
 
 
     except Exception as error:
-
+        import traceback
+        traceback.print_exc()
         print(
             f"Error creating contact: {error}"
         )
 
-
         return jsonify({
-
             "success": False,
-
-            "message":
-                "Failed to create emergency contact"
-
+            "message": f"Failed to create emergency contact: {str(error)}"
         }), 500
 
 

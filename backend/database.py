@@ -30,11 +30,14 @@ def get_connection():
         exist_ok=True
     )
 
-    connection = sqlite3.connect(DATABASE)
+    connection = sqlite3.connect(DATABASE, timeout=30.0)
 
     connection.row_factory = sqlite3.Row
 
     connection.execute("PRAGMA foreign_keys = ON;")
+    connection.execute("PRAGMA journal_mode = WAL;")
+    connection.execute("PRAGMA busy_timeout = 30000;")
+    connection.execute("PRAGMA synchronous = NORMAL;")
 
     return connection
 
@@ -516,69 +519,78 @@ def add_contact(
     telegram_chat_id=None,
     priority=1
 ):
-
     connection = get_connection()
+    try:
+        cursor = connection.cursor()
+        priority_val = int(priority) if priority else 1
 
-    cursor = connection.cursor()
-
-    priority_val = int(priority) if priority else 1
-
-    cursor.execute("""
-        INSERT INTO emergency_contacts (
+        cursor.execute("""
+            INSERT INTO emergency_contacts (
+                user_id,
+                name,
+                phone,
+                telegram_chat_id,
+                priority
+            )
+            VALUES (?, ?, ?, ?, ?)
+        """, (
             user_id,
             name,
             phone,
             telegram_chat_id,
-            priority
-        )
+            priority_val
+        ))
 
-        VALUES (?, ?, ?, ?, ?)
-    """, (
-        user_id,
-        name,
-        phone,
-        telegram_chat_id,
-        priority_val
-    ))
-
-    connection.commit()
-
-    contact_id = cursor.lastrowid
-
-    connection.close()
-
-    return contact_id
-
-    return contact_id
+        connection.commit()
+        contact_id = cursor.lastrowid
+        return contact_id
+    finally:
+        connection.close()
 
 
 def delete_contact(
-    user_id,
-    contact_id
+    arg1,
+    arg2
 ):
-
+    """
+    Deletes emergency contact matching id and user_id.
+    Accepts (user_id, contact_id) or (contact_id, user_id).
+    First decouples references in notification_logs to prevent FK constraint failures.
+    """
     connection = get_connection()
+    try:
+        cursor = connection.cursor()
 
-    cursor = connection.cursor()
+        # Locate contact to verify ownership
+        cursor.execute("""
+            SELECT id, user_id FROM emergency_contacts
+            WHERE (id = ? AND user_id = ?) OR (id = ? AND user_id = ?)
+        """, (arg1, arg2, arg2, arg1))
+        row = cursor.fetchone()
 
-    cursor.execute("""
-        DELETE FROM emergency_contacts
+        if not row:
+            return False
 
-        WHERE id = ?
+        contact_id = row["id"]
+        user_id = row["user_id"]
 
-        AND user_id = ?
-    """, (
-        contact_id,
-        user_id
-    ))
+        # Nullify contact_id references in notification_logs to preserve audit logs and satisfy FK
+        cursor.execute("""
+            UPDATE notification_logs
+            SET contact_id = NULL
+            WHERE contact_id = ?
+        """, (contact_id,))
 
-    deleted = cursor.rowcount > 0
+        cursor.execute("""
+            DELETE FROM emergency_contacts
+            WHERE id = ? AND user_id = ?
+        """, (contact_id, user_id))
 
-    connection.commit()
-
-    connection.close()
-
-    return deleted
+        deleted = cursor.rowcount > 0
+        connection.commit()
+        return deleted
+    finally:
+        connection.close()
 
 
 # ============================================================
