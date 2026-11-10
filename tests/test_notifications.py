@@ -53,6 +53,7 @@ class TestNotificationDelivery(unittest.TestCase):
         initialize_database()
         cls.client = app.test_client()
         app.config["TESTING"] = True
+        os.environ["TESTING"] = "true"
 
         # Ensure a clean test user exists
         cls.test_email = "phase4_tester@sosguardian.local"
@@ -90,6 +91,10 @@ class TestNotificationDelivery(unittest.TestCase):
             )
         else:
             cls.contact2_id = tg_contacts[0]["id"]
+
+    @classmethod
+    def tearDownClass(cls):
+        os.environ.pop("TESTING", None)
 
     def test_01_telegram_provider_unconfigured_simulated(self):
         """TelegramProvider without token should gracefully run in simulated mode without throwing."""

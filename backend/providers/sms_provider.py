@@ -45,7 +45,7 @@ class MockSMSProvider(BaseSMSProvider):
             "provider": "mock",
             "status": "simulated",
             "phone": phone_str,
-            "note": "Simulated dispatch. Configure Twilio or Fast2SMS in .env for live carrier delivery."
+            "note": "Simulated dispatch. Configure httpSMS, Fast2SMS, or Twilio in .env for live carrier delivery."
         }
 
 
@@ -407,6 +407,14 @@ class HttpSMSProvider(BaseSMSProvider):
                 err_msg = parsed.get("message") or parsed.get("error") or str(error)
             except Exception:
                 err_msg = f"HTTP {error.code}: {error.reason}"
+
+            if error.code == 401:
+                err_msg = (
+                    f"401 Unauthorized: {err_msg} - "
+                    "Make sure you use the Account API Key from https://httpsms.com/settings. "
+                    "Keys starting with 'pk_' are Phone API Keys used only for logging into the Android app."
+                )
+
             print(f"⚠️ httpSMS HTTP Error ({error.code}): {err_msg}")
             return {
                 "success": False,
@@ -441,6 +449,12 @@ def get_sms_provider(provider_name=None) -> BaseSMSProvider:
     Factory function resolving active SMS provider from environment or argument.
     Defaults to MockSMSProvider if credentials are not configured or SMS_PROVIDER=mock.
     """
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except Exception:
+        pass
+
     selected = (
         provider_name or
         os.getenv("SMS_PROVIDER", "mock")

@@ -172,7 +172,9 @@ class NotificationService:
             if phone:
                 try:
                     active_provider = os.getenv("SMS_PROVIDER", "mock").strip().lower()
-                    if self._custom_sms is None and active_provider == "httpsms":
+                    if os.getenv("TESTING") == "true":
+                        sms_result = MockSMSProvider().send_sms(phone, sms_body)
+                    elif self._custom_sms is None and active_provider == "httpsms":
                         sms_result = send_httpsms_alert(phone, sms_body)
                     else:
                         sms_result = self.sms.send_sms(phone, sms_body)
@@ -316,7 +318,9 @@ class NotificationService:
         if phone:
             test_sms = format_test_sms(user_name)
             active_provider = os.getenv("SMS_PROVIDER", "mock").strip().lower()
-            if self._custom_sms is None and active_provider == "httpsms":
+            if os.getenv("TESTING") == "true":
+                results["sms"] = MockSMSProvider().send_sms(phone, test_sms)
+            elif self._custom_sms is None and active_provider == "httpsms":
                 results["sms"] = send_httpsms_alert(phone, test_sms)
             else:
                 results["sms"] = self.sms.send_sms(phone, test_sms)
@@ -382,7 +386,9 @@ class NotificationService:
             if phone:
                 try:
                     active_provider = os.getenv("SMS_PROVIDER", "mock").strip().lower()
-                    if self._custom_sms is None and active_provider == "httpsms":
+                    if os.getenv("TESTING") == "true":
+                        res = MockSMSProvider().send_sms(phone, sms_body)
+                    elif self._custom_sms is None and active_provider == "httpsms":
                         res = send_httpsms_alert(phone, sms_body)
                     else:
                         res = self.sms.send_sms(phone, sms_body)
@@ -428,6 +434,8 @@ class NotificationService:
 
     def send_sms(self, phone, message):
         """Backward-compatible helper method."""
+        if os.getenv("TESTING") == "true":
+            return MockSMSProvider().send_sms(phone, message)
         active_provider = os.getenv("SMS_PROVIDER", "mock").strip().lower()
         if self._custom_sms is None and active_provider == "httpsms":
             return send_httpsms_alert(phone, message)
