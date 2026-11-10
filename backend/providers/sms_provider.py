@@ -5,6 +5,7 @@ Supports Mock simulation, Twilio, and Fast2SMS with provider-independent interfa
 
 import os
 import json
+import re
 import base64
 import urllib.request
 import urllib.parse
@@ -167,7 +168,8 @@ class TwilioSMSProvider(BaseSMSProvider):
 
 class Fast2SMSProvider(BaseSMSProvider):
     """
-    Fast2SMS provider for live SMS dispatch in supported regions.
+    Fast2SMS provider for live SMS dispatch in supported regions (India).
+    Uses Quick SMS route ("q") to utilize free trial signup credits.
     Configured via FAST2SMS_API_KEY.
     """
 
@@ -185,8 +187,23 @@ class Fast2SMSProvider(BaseSMSProvider):
             not self.api_key.startswith("YOUR_")
         )
 
+    @staticmethod
+    def clean_phone_number(phone: str) -> str:
+        """
+        Sanitize phone number for Fast2SMS Quick SMS route.
+        Fast2SMS expects a 10-digit Indian mobile number.
+        Strips country codes (+91, 91) or leading 0 if present.
+        """
+        digits = "".join(ch for ch in str(phone or "") if ch.isdigit())
+        if len(digits) == 12 and digits.startswith("91"):
+            return digits[2:]
+        if len(digits) == 11 and digits.startswith("0"):
+            return digits[1:]
+        return digits
+
     def send_sms(self, phone: str, message: str) -> dict:
         phone_str = str(phone).strip()
+        clean_phone = self.clean_phone_number(phone_str)
 
         if not self.is_configured():
             return {
@@ -194,17 +211,27 @@ class Fast2SMSProvider(BaseSMSProvider):
                 "provider": "fast2sms",
                 "status": "failed",
                 "phone": phone_str,
-                "error": "Fast2SMS API key unconfigured"
+                "error": "Fast2SMS API key unconfigured (set FAST2SMS_API_KEY in .env)"
+            }
+
+        if len(clean_phone) != 10:
+            return {
+                "success": False,
+                "provider": "fast2sms",
+                "status": "failed",
+                "phone": phone_str,
+                "error": f"Invalid mobile number format for Fast2SMS (requires 10 digits, got '{phone_str}')"
             }
 
         url = "https://www.fast2sms.com/dev/bulkV2"
 
+        # Fast2SMS Quick SMS route ("q") utilizes free trial signup credits
         payload = {
             "route": "q",
             "message": message,
             "language": "english",
             "flash": 0,
-            "numbers": phone_str
+            "numbers": clean_phone
         }
 
         data_bytes = json.dumps(payload).encode("utf-8")
@@ -214,7 +241,8 @@ class Fast2SMSProvider(BaseSMSProvider):
             data=data_bytes,
             headers={
                 "authorization": self.api_key,
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "User-Agent": "SOS-Guardian-Fast2SMS/1.0"
             }
         )
 
@@ -222,23 +250,55 @@ class Fast2SMSProvider(BaseSMSProvider):
             with urllib.request.urlopen(req, timeout=12) as response:
                 result = json.loads(response.read().decode("utf-8"))
                 if result.get("return"):
-                    print(f"📱 Fast2SMS alert dispatched to {phone_str}")
+                    print(f"📱 Fast2SMS alert dispatched to {clean_phone} via Quick route ('q')")
                     return {
                         "success": True,
                         "provider": "fast2sms",
                         "status": "sent",
-                        "phone": phone_str
+                        "phone": clean_phone,
+                        "request_id": result.get("request_id"),
+                        "message": result.get("message")
                     }
                 else:
-                    err_msg = result.get("message", ["Unknown error"])[0] if isinstance(result.get("message"), list) else result.get("message", "Failed")
+                    raw_msg = result.get("message", "Failed")
+                    err_msg = ", ".join(raw_msg) if isinstance(raw_msg, list) else str(raw_msg)
                     print(f"⚠️ Fast2SMS Error: {err_msg}")
                     return {
                         "success": False,
                         "provider": "fast2sms",
                         "status": "failed",
-                        "phone": phone_str,
+                        "phone": clean_phone,
                         "error": str(err_msg)
                     }
+
+        except urllib.error.HTTPError as error:
+            error_body = error.read().decode("utf-8", errors="ignore")
+            try:
+                parsed = json.loads(error_body)
+                raw_msg = parsed.get("message", str(error))
+                err_msg = ", ".join(raw_msg) if isinstance(raw_msg, list) else str(raw_msg)
+            except Exception:
+                err_msg = f"HTTP {error.code}: {error.reason}"
+
+            print(f"⚠️ Fast2SMS HTTP Error ({error.code}): {err_msg}")
+            return {
+                "success": False,
+                "provider": "fast2sms",
+                "status": "failed",
+                "phone": clean_phone,
+                "error": err_msg,
+                "http_code": error.code
+            }
+
+        except urllib.error.URLError as error:
+            print(f"⚠️ Fast2SMS URLError: {error.reason}")
+            return {
+                "success": False,
+                "provider": "fast2sms",
+                "status": "failed",
+                "phone": clean_phone,
+                "error": f"Network error: {error.reason}"
+            }
 
         except Exception as error:
             print(f"⚠️ Fast2SMS Exception: {error}")
@@ -246,7 +306,7 @@ class Fast2SMSProvider(BaseSMSProvider):
                 "success": False,
                 "provider": "fast2sms",
                 "status": "failed",
-                "phone": phone_str,
+                "phone": clean_phone,
                 "error": str(error)
             }
 
@@ -254,7 +314,7 @@ class Fast2SMSProvider(BaseSMSProvider):
 def get_sms_provider(provider_name=None) -> BaseSMSProvider:
     """
     Factory function resolving active SMS provider from environment or argument.
-    Defaults to MockSMSProvider if credentials are not configured.
+    Defaults to MockSMSProvider if credentials are not configured or SMS_PROVIDER=mock.
     """
     selected = (
         provider_name or
@@ -278,9 +338,20 @@ def get_sms_provider(provider_name=None) -> BaseSMSProvider:
     return MockSMSProvider()
 
 
-def format_emergency_sms(user_name, trigger_type, maps_url):
-    """Format emergency text message for standard cellular SMS."""
-    loc_text = f"📍 Location:\n{maps_url}" if maps_url else "📍 Location: Unavailable (User GPS disabled or signal lost)"
+def format_emergency_sms(user_name, trigger_type, maps_url=None, latitude=None, longitude=None):
+    """
+    Format emergency text message for standard cellular SMS.
+    Includes clickable Google Maps pin: https://www.google.com/maps?q=LAT,LONG
+    or explicitly displays 'GPS Unavailable' when location coordinates are missing.
+    """
+    if latitude is not None and longitude is not None:
+        pin_url = f"https://www.google.com/maps?q={latitude},{longitude}"
+        loc_text = f"📍 Location:\n{pin_url}"
+    elif maps_url:
+        loc_text = f"📍 Location:\n{maps_url}"
+    else:
+        loc_text = "📍 Location: GPS Unavailable"
+
     return (
         f"🚨 SOS EMERGENCY ALERT!\n\n"
         f"Distress alert activated by {user_name} via {trigger_type}.\n\n"

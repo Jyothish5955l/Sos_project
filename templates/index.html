@@ -496,8 +496,10 @@
             <section class="panel">
 
                 <div class="panel-heading">
-                    <h3>👥 Emergency Contacts</h3>
-                    <span>Trusted people</span>
+                    <div>
+                        <h3>👥 Guardian Emergency Contacts</h3>
+                        <p class="guardian-subtitle">📲 SMS alerts sent directly to mobile phone — no app or registration required for guardians.</p>
+                    </div>
                 </div>
 
                 <form id="contactForm">
@@ -505,25 +507,28 @@
                     <input
                         type="text"
                         id="contactName"
-                        placeholder="Contact name"
+                        placeholder="Guardian Name (e.g. Mom, Friend)"
                         required
+                        maxlength="60"
                     >
 
                     <input
                         type="tel"
                         id="contactPhone"
-                        placeholder="Phone number"
+                        placeholder="10-digit Mobile Number (e.g. 9876543210)"
                         required
+                        pattern="^\+?[0-9\s\-()]{10,15}$"
+                        title="Please enter a valid 10-digit mobile number"
                     >
 
                     <input
                         type="text"
                         id="contactTelegram"
-                        placeholder="Telegram Chat ID (optional)"
+                        placeholder="Telegram Chat ID or @username (optional)"
                     >
 
-                    <button type="submit">
-                        + Add Contact
+                    <button type="submit" id="addContactBtn">
+                        + Add Guardian Contact
                     </button>
 
                 </form>

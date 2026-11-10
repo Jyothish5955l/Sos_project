@@ -769,6 +769,9 @@ def create_contact():
             "message":
                 "Emergency contact added successfully",
 
+            "contact_id":
+                contact_id,
+
             "contact": {
 
                 "id":
@@ -1151,6 +1154,9 @@ def sos():
 
             "message":
                 "SOS processed successfully",
+
+            "event_id":
+                event_id,
 
             "event": {
 

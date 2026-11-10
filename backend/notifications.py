@@ -5,9 +5,16 @@ Tracks per-channel delivery results and logs history in SQLite.
 """
 
 from providers.telegram_provider import telegram_provider, TelegramProvider
-from providers.sms_provider import get_sms_provider, format_emergency_sms, format_test_sms
+from providers.sms_provider import (
+    get_sms_provider,
+    format_emergency_sms,
+    format_test_sms,
+    Fast2SMSProvider,
+    MockSMSProvider,
+    TwilioSMSProvider
+)
 from providers.fcm_provider import fcm_provider
-from database import log_notification, update_sos_event_status
+from database import log_notification, update_sos_event_status, get_contacts as db_get_contacts
 
 
 class NotificationService:
@@ -17,13 +24,16 @@ class NotificationService:
     per-recipient delivery tracking, and persistent database auditing.
     """
 
-    def __init__(self):
+    def __init__(self, custom_sms_provider=None):
         self.telegram = telegram_provider
         self.fcm = fcm_provider
+        self._custom_sms = custom_sms_provider
 
     @property
     def sms(self):
-        """Dynamically fetch active SMS provider based on current environment."""
+        """Dynamically fetch active SMS provider based on current environment or instance."""
+        if self._custom_sms is not None:
+            return self._custom_sms
         return get_sms_provider()
 
     def send_emergency_alerts(
@@ -34,12 +44,20 @@ class NotificationService:
         latitude,
         longitude,
         maps_url,
-        contacts
+        contacts=None,
+        user_id=None
     ):
         """
         Dispatch emergency alerts to all configured contacts across all active channels.
+        Pulls saved numbers from SQLite if contacts list is not explicitly passed.
         Logs every attempt in the database and updates overall SOS event status.
         """
+        # Pull saved contacts directly from SQLite if not explicitly passed
+        if contacts is None and user_id is not None:
+            contacts = db_get_contacts(user_id)
+        elif contacts is None:
+            contacts = []
+
         if not contacts:
             if sos_event_id:
                 update_sos_event_status(sos_event_id, "no_contacts")
@@ -57,7 +75,13 @@ class NotificationService:
                 }
             }
 
-        sms_body = format_emergency_sms(user_name, trigger_type, maps_url)
+        sms_body = format_emergency_sms(
+            user_name,
+            trigger_type,
+            maps_url=maps_url,
+            latitude=latitude,
+            longitude=longitude
+        )
         telegram_body = TelegramProvider.format_emergency_message(
             user_name,
             trigger_type,

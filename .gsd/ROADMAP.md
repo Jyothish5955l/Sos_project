@@ -1,7 +1,7 @@
 ---
 milestone: SOS Guardian Core Delivery
 version: 1.0.0
-updated: 2026-11-10T10:20:00+05:30
+updated: 2026-11-10T10:33:00+05:30
 ---
 
 # Roadmap — SOS Guardian
@@ -21,6 +21,7 @@ updated: 2026-11-10T10:20:00+05:30
 - [x] Emergency notification dispatch to Telegram Bot API with location maps link and provider status tracking.
 - [x] Secure user authentication, session hygiene, rate limiting, and complete cross-user data isolation.
 - [x] Real-time System Readiness Matrix reflecting active sensor and contact arming status.
+- [x] End-to-end automatic SMS alert integration (Guardian 10-digit mobile input, no-app requirement, Fast2SMS Quick route `route="q"`, clickable Google Maps pin: `https://www.google.com/maps?q=LAT,LONG`).
 
 ---
 
@@ -81,9 +82,9 @@ updated: 2026-11-10T10:20:00+05:30
 
 ---
 
-### Phase 5: Security Hardening & UI/UX Polish
+### Phase 5: Security Hardening & UI/UX Polish (including Automatic SMS Integration)
 **Status:** 🔄 Completed (Awaiting Approval to proceed to Phase 6)  
-**Objective:** Harden authentication (session hygiene, cookie policies, sliding-window rate limiting, input validation, cross-user isolation), implement real-time System Readiness Matrix (PRD Module B), and optimize mobile accessibility.  
+**Objective:** Harden authentication (session hygiene, cookie policies, sliding-window rate limiting, input validation, cross-user isolation), implement real-time System Readiness Matrix (PRD Module B), optimize mobile accessibility, and complete end-to-end automatic SMS dispatch.  
 **Deliverables:**
 - [x] Implemented thread-safe in-memory sliding window rate limiter (`backend/rate_limiter.py`).
 - [x] Configured strict session cookie hygiene: `SESSION_COOKIE_HTTPONLY=True`, `SESSION_COOKIE_SAMESITE="Lax"`, `PERMANENT_SESSION_LIFETIME=timedelta(days=7)`, `MAX_CONTENT_LENGTH=2MB`.
@@ -93,8 +94,14 @@ updated: 2026-11-10T10:20:00+05:30
 - [x] Enforced strict cross-user data isolation and route protection on all contact management and SOS endpoints.
 - [x] Built dynamic System Readiness Matrix in `templates/index.html`, `static/style.css`, and `static/app.js` with live multi-sensor hardware status (Camera/Gesture, Voice, GPS, Contacts) and overall operational badge.
 - [x] Optimized touch target accessibility (44px minimum height/width) and added `aria-label` tags for screen readers.
-- [x] Authored and executed automated security test suite `tests/test_phase5_security.py` (10/10 tests passing).
-- [x] Verified zero regressions across all 59 total automated tests.
+- [x] Completed End-to-End Automatic SMS Alert Integration:
+  - Form allows entering guardian name and 10-digit mobile number, saving directly to SQLite. Recipient requires NO app or registration.
+  - Wired Fast2SMS using Quick SMS route (`route="q"`) utilizing free trial signup credits.
+  - Added 10-digit phone cleaner for Indian numbers (`clean_phone_number`).
+  - Configured `SMS_PROVIDER=mock` as default in `.env` to prevent burning credits during automated testing.
+  - Automatically pulls saved numbers from SQLite on SOS activation, generating clickable Google Maps pin: `https://www.google.com/maps?q=LAT,LONG` (or `'GPS Unavailable'`).
+- [x] Authored and executed automated security and notification tests (`tests/test_phase5_security.py`, `tests/test_notifications.py`, and `tests/verify_sms_e2e.py`).
+- [x] Verified zero regressions across all 66 total automated checks.
 
 ---
 
@@ -121,6 +128,6 @@ updated: 2026-11-10T10:20:00+05:30
 | **Phase 2** | Core System Stabilization | ✅ Complete | 100% |
 | **Phase 3** | Voice SOS Engine | ✅ Complete | 100% |
 | **Phase 4** | Emergency Notification Delivery | ✅ Complete | 100% |
-| **Phase 5** | Security Hardening & UI/UX Polish | 🔄 Completed (Review) | 100% |
+| **Phase 5** | Security Hardening, UI/UX & Live SMS | 🔄 Completed (Review) | 100% |
 | **Phase 6** | Intelligent Emergency Features | ⬜ Not Started | 0% |
 | **Phase 7** | Production Deployment & Final Verification | ⬜ Not Started | 0% |

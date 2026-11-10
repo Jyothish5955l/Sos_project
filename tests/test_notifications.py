@@ -34,12 +34,18 @@ from providers.sms_provider import (
     TwilioSMSProvider,
     Fast2SMSProvider,
     get_sms_provider,
-    format_emergency_sms
+    format_emergency_sms,
+    format_test_sms
 )
 from notifications import NotificationService, notification_service
+from rate_limiter import rate_limiter
 
 
 class TestNotificationDelivery(unittest.TestCase):
+
+    def setUp(self):
+        """Clear sliding window rate limits before every test run."""
+        rate_limiter.clear_all()
 
     @classmethod
     def setUpClass(cls):
@@ -186,6 +192,67 @@ class TestNotificationDelivery(unittest.TestCase):
         self.assertEqual(res["status"], "sent")
         self.assertEqual(res["sid"], "SM1234567890abcdef")
 
+    def test_07b_fast2sms_clean_phone_number(self):
+        """Fast2SMSProvider.clean_phone_number should normalize Indian mobile numbers to 10 digits."""
+        self.assertEqual(Fast2SMSProvider.clean_phone_number("+91 9876543210"), "9876543210")
+        self.assertEqual(Fast2SMSProvider.clean_phone_number("+919876543210"), "9876543210")
+        self.assertEqual(Fast2SMSProvider.clean_phone_number("09876543210"), "9876543210")
+        self.assertEqual(Fast2SMSProvider.clean_phone_number("98765-43210"), "9876543210")
+        self.assertEqual(Fast2SMSProvider.clean_phone_number("9876543210"), "9876543210")
+
+    @patch("urllib.request.urlopen")
+    def test_07c_fast2sms_success(self, mock_urlopen):
+        """Fast2SMSProvider should dispatch POST with route='q' and authorization header."""
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps({
+            "return": True,
+            "request_id": "fast2sms_req_998877",
+            "message": ["SMS sent successfully."]
+        }).encode("utf-8")
+        mock_response.__enter__.return_value = mock_response
+        mock_urlopen.return_value = mock_response
+
+        provider = Fast2SMSProvider(api_key="fast2sms_test_secret_key")
+        self.assertTrue(provider.is_configured())
+
+        res = provider.send_sms("+91 9876543210", "🚨 Emergency Fast2SMS alert")
+        self.assertTrue(res["success"])
+        self.assertEqual(res["status"], "sent")
+        self.assertEqual(res["phone"], "9876543210")
+        self.assertEqual(res["request_id"], "fast2sms_req_998877")
+
+        # Verify the request payload sent to Fast2SMS dev/bulkV2
+        self.assertEqual(mock_urlopen.call_count, 1)
+        req_sent = mock_urlopen.call_args[0][0]
+        self.assertEqual(req_sent.full_url, "https://www.fast2sms.com/dev/bulkV2")
+        self.assertEqual(req_sent.headers.get("Authorization"), "fast2sms_test_secret_key")
+        payload = json.loads(req_sent.data.decode("utf-8"))
+        self.assertEqual(payload.get("route"), "q")
+        self.assertEqual(payload.get("numbers"), "9876543210")
+
+    def test_07d_format_emergency_sms_maps_url_and_fallback(self):
+        """format_emergency_sms should include clickable Google Maps pin or explicit 'GPS Unavailable'."""
+        # 1. With coordinates
+        sms_with_coords = format_emergency_sms(
+            user_name="Jane Doe",
+            trigger_type="manual",
+            latitude=12.9716,
+            longitude=77.5946
+        )
+        self.assertIn("https://www.google.com/maps?q=12.9716,77.5946", sms_with_coords)
+        self.assertIn("Jane Doe", sms_with_coords)
+        self.assertIn("manual", sms_with_coords)
+
+        # 2. Without coordinates (fallback)
+        sms_no_coords = format_emergency_sms(
+            user_name="Jane Doe",
+            trigger_type="voice",
+            latitude=None,
+            longitude=None
+        )
+        self.assertIn("GPS Unavailable", sms_no_coords)
+        self.assertNotIn("https://www.google.com/maps", sms_no_coords)
+
     def test_08_multichannel_emergency_alerts_orchestration(self):
         """NotificationService should dispatch to both SMS and Telegram and persist logs in SQLite."""
         event_id = create_sos_event(
@@ -258,6 +325,58 @@ class TestNotificationDelivery(unittest.TestCase):
         first_event = data["events"][0]
         self.assertIn("notifications", first_event)
         self.assertIsInstance(first_event["notifications"], list)
+
+    def test_12_end_to_end_contact_creation_and_sos_dispatch(self):
+        """
+        End-to-End Test:
+        1. User adds a guardian contact with a 10-digit mobile number via POST /api/contacts.
+        2. Recipient requires NO app or registration; saved directly to SQLite.
+        3. User triggers emergency via POST /api/sos.
+        4. Emergency service pulls saved numbers from SQLite and dispatches SMS with Google Maps pin.
+        5. Delivery is audited in notification_logs table.
+        """
+        with self.client.session_transaction() as sess:
+            sess["user_id"] = self.user_id
+
+        # 1. Add guardian contact with 10-digit mobile number
+        contact_payload = {
+            "name": "Guardian Hero",
+            "phone": "9876543210",
+            "telegram_chat_id": None
+        }
+        res_add = self.client.post("/api/contacts", json=contact_payload)
+        self.assertIn(res_add.status_code, [200, 201])
+        guardian_id = res_add.get_json().get("contact_id") or res_add.get_json()["contact"]["id"]
+
+        # Verify saved in SQLite
+        db_contacts = get_contacts(self.user_id)
+        saved_guardian = next((c for c in db_contacts if c["id"] == guardian_id), None)
+        self.assertIsNotNone(saved_guardian)
+        self.assertEqual(saved_guardian["phone"], "9876543210")
+        self.assertEqual(saved_guardian["name"], "Guardian Hero")
+
+        # 2. Trigger SOS distress signal with location
+        sos_payload = {
+            "trigger_type": "manual",
+            "latitude": 13.0827,
+            "longitude": 80.2707
+        }
+        res_sos = self.client.post("/api/sos", json=sos_payload)
+        self.assertEqual(res_sos.status_code, 200)
+        sos_data = res_sos.get_json()
+        self.assertTrue(sos_data["success"])
+        sos_event_id = sos_data.get("event_id") or sos_data["event"]["id"]
+
+        # 3. Verify notification_logs in SQLite recorded an SMS delivery to the guardian
+        logs = get_notification_logs(sos_event_id)
+        guardian_sms_logs = [
+            l for l in logs
+            if l["contact_id"] == guardian_id and l["channel"] == "sms"
+        ]
+        self.assertEqual(len(guardian_sms_logs), 1)
+        log_entry = guardian_sms_logs[0]
+        self.assertEqual(log_entry["recipient"], "9876543210")
+        self.assertIn(log_entry["status"], ["sent", "simulated"])
 
 
 if __name__ == "__main__":
