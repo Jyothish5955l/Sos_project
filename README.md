@@ -1,5 +1,12 @@
 # 🛡️ SOS Guardian — Emergency Assistance & Protection Platform
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Render-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://sos-guardian-1hh5.onrender.com)
+[![Status](https://img.shields.io/badge/Status-Active%20%26%20Online-success?style=for-the-badge)](https://sos-guardian-1hh5.onrender.com)
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Flask](https://img.shields.io/badge/Flask-3.1-000000?style=for-the-badge&logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
+
+> 🌐 **Live Web Application**: [https://sos-guardian-1hh5.onrender.com](https://sos-guardian-1hh5.onrender.com)
+
 **SOS Guardian** is a real-time, multi-modal emergency assistance web platform designed for rapid personal distress dispatch. It enables users to trigger life-saving emergency notifications using manual controls, hands-free computer vision, voice recognition, motion shock sensors, or automated safety check-in timers.
 
 ---
@@ -115,14 +122,16 @@ docker run -d -p 5000:5000 --env-file .env --name sos-guardian-app sos-guardian
 
 ## ☁️ Cloud Deployment (Render.com)
 
-1. Connect your repository to **[Render.com](https://render.com)**.
-2. Select **Web Service**.
-3. Set **Build Command**: `pip install -r requirements.txt`
-4. Set **Start Command**: `gunicorn wsgi:app --workers 2 --bind 0.0.0.0:$PORT`
-5. Configure your environment variables in the Render dashboard.
+The platform is deployed live on Render's cloud infrastructure with automatic SSL certification:
+* **Production URL**: [https://sos-guardian-1hh5.onrender.com](https://sos-guardian-1hh5.onrender.com)
+* **System Health Endpoint**: [https://sos-guardian-1hh5.onrender.com/health](https://sos-guardian-1hh5.onrender.com/health)
+
+### Continuous Deployment
+Every push to the `main` branch on GitHub triggers an automated build and zero-downtime deployment on Render.
 
 ---
 
 ## 📄 License
 
 This project is licensed under the MIT License — see the LICENSE file for details.
+
