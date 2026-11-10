@@ -1,13 +1,13 @@
 ---
 milestone: SOS Guardian Core Delivery
 version: 1.0.0
-updated: 2026-11-10T10:33:00+05:30
+updated: 2026-11-10T10:43:00+05:30
 ---
 
 # Roadmap — SOS Guardian
 
-> **Current Phase:** Phase 5 — Security Hardening & UI/UX Polish  
-> **Status:** Completed Phase 5 (Awaiting User Approval for Phase 6)  
+> **Current Phase:** Phase 6 — Intelligent Emergency Features  
+> **Status:** Completed Phase 6 (Awaiting User Approval for Phase 7)  
 > **Approval Protocol:** Strict phase-by-phase execution control. Do NOT advance without explicit user approval (`APPROVE PHASE [N]`).
 
 ---
@@ -22,6 +22,11 @@ updated: 2026-11-10T10:33:00+05:30
 - [x] Secure user authentication, session hygiene, rate limiting, and complete cross-user data isolation.
 - [x] Real-time System Readiness Matrix reflecting active sensor and contact arming status.
 - [x] End-to-end automatic SMS alert integration (Guardian 10-digit mobile input, no-app requirement, Fast2SMS Quick route `route="q"`, clickable Google Maps pin: `https://www.google.com/maps?q=LAT,LONG`).
+- [x] Intelligent fall and impact detection with 15-second audible safety verification prompt.
+- [x] Continuous live location breadcrumbs streaming (`POST /api/sos/<id>/location`) and tracking endpoint (`GET /api/sos/<id>/tracking`).
+- [x] Multi-contact sequential emergency escalation protocol and emergency acknowledgement (`POST /api/sos/<id>/acknowledge`).
+- [x] Safety check-in timer (dead man's switch) with automated emergency SOS trigger upon missed check-in.
+- [x] Nearby emergency services and quick-dial helplines (Police, Ambulance, Women Helpline, Fire, and geo-targeted hospital/police searches).
 
 ---
 
@@ -83,14 +88,14 @@ updated: 2026-11-10T10:33:00+05:30
 ---
 
 ### Phase 5: Security Hardening & UI/UX Polish (including Automatic SMS Integration)
-**Status:** 🔄 Completed (Awaiting Approval to proceed to Phase 6)  
+**Status:** ✅ Complete (Approved)  
 **Objective:** Harden authentication (session hygiene, cookie policies, sliding-window rate limiting, input validation, cross-user isolation), implement real-time System Readiness Matrix (PRD Module B), optimize mobile accessibility, and complete end-to-end automatic SMS dispatch.  
 **Deliverables:**
 - [x] Implemented thread-safe in-memory sliding window rate limiter (`backend/rate_limiter.py`).
 - [x] Configured strict session cookie hygiene: `SESSION_COOKIE_HTTPONLY=True`, `SESSION_COOKIE_SAMESITE="Lax"`, `PERMANENT_SESSION_LIFETIME=timedelta(days=7)`, `MAX_CONTENT_LENGTH=2MB`.
 - [x] Added security response headers in `backend/app.py`: `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `X-XSS-Protection: 1; mode=block`, `Referrer-Policy: strict-origin-when-cross-origin`, and `Permissions-Policy`.
 - [x] Implemented endpoint rate limits: `/api/auth/login` (5/60s), `/api/auth/register` (10/60s), `/api/sos` (1/3s), `/api/contacts/<id>/test` (5/60s).
-- [x] Added strict input validation for user registration (email regex, 6-128 char password), contact creation (phone regex, telegram regex, 20 contacts limit), and SOS requests (trigger modality & coordinate range validation).
+- [x] Added strict input validation for user registration, contact creation, and SOS requests.
 - [x] Enforced strict cross-user data isolation and route protection on all contact management and SOS endpoints.
 - [x] Built dynamic System Readiness Matrix in `templates/index.html`, `static/style.css`, and `static/app.js` with live multi-sensor hardware status (Camera/Gesture, Voice, GPS, Contacts) and overall operational badge.
 - [x] Optimized touch target accessibility (44px minimum height/width) and added `aria-label` tags for screen readers.
@@ -100,20 +105,39 @@ updated: 2026-11-10T10:33:00+05:30
   - Added 10-digit phone cleaner for Indian numbers (`clean_phone_number`).
   - Configured `SMS_PROVIDER=mock` as default in `.env` to prevent burning credits during automated testing.
   - Automatically pulls saved numbers from SQLite on SOS activation, generating clickable Google Maps pin: `https://www.google.com/maps?q=LAT,LONG` (or `'GPS Unavailable'`).
-- [x] Authored and executed automated security and notification tests (`tests/test_phase5_security.py`, `tests/test_notifications.py`, and `tests/verify_sms_e2e.py`).
-- [x] Verified zero regressions across all 66 total automated checks.
 
 ---
 
 ### Phase 6: Intelligent Emergency Features
-**Status:** ⬜ Not Started (Awaiting Phase 5 Approval)  
-**Objective:** Explore and prototype advanced intelligent features: fall detection via pose estimation, live location tracking, and multi-contact escalation.  
-**Depends on:** Phase 5 approval.
+**Status:** 🔄 Completed (Awaiting Approval to proceed to Phase 7)  
+**Objective:** Implement intelligent fall and impact detection, continuous live location breadcrumbs streaming, multi-contact escalation hierarchy, emergency acknowledgement, safety check-in timer (dead man's switch), and nearby emergency services/helplines.  
+**Deliverables:**
+- [x] Built Intelligent Fall & Impact Detection:
+  - Browser `DeviceMotionEvent` acceleration spike & immobility monitoring.
+  - Dedicated Fall Confirmation Modal (`#fallModal`) with 15-second audible safety prompt chimes and manual test trigger (`#btnSimulateFall`).
+  - Integrated `'fall_detection'` trigger modality into backend central SOS engine.
+- [x] Built Continuous Live Location Tracking & Breadcrumbs Engine:
+  - Schema extension: `sos_location_breadcrumbs` table storing GPS coordinate history (latitude, longitude, accuracy, speed, timestamp).
+  - Background Geolocation watcher (`navigator.geolocation.watchPosition`) streaming coordinates to `POST /api/sos/<id>/location`.
+  - Public/tokenized live tracking endpoint: `GET /api/sos/<id>/tracking` returning latest location, breadcrumbs trail, and responder telemetry.
+- [x] Built Multi-Contact Sequential Escalation & Acknowledgement Protocol:
+  - Schema extension: added `priority` (Tier 1 Primary, Tier 2 Secondary, Tier 3 Backup) to `emergency_contacts`, and `escalation_level`, `acknowledged_at`, `acknowledged_by` to `sos_events`.
+  - Added `POST /api/sos/<id>/escalate` which auto-escalates or manually triggers alerts to higher priority contacts.
+  - Added `POST /api/sos/<id>/acknowledge` allowing responders/guardians to acknowledge alerts and halt further escalation.
+- [x] Built Safety Check-in Timer (Dead Man's Switch / Periodic Welfare Check):
+  - Schema extension: `safety_checkins` table storing timer duration, expiration timestamp, status, and note.
+  - Endpoints: `POST /api/safety-checkin/start`, `GET /api/safety-checkin/status`, `POST /api/safety-checkin/checkin`, and `POST /api/safety-checkin/trigger-expired`.
+  - Dynamic dashboard UI with live countdown clock and automated SOS trigger if check-in is missed.
+- [x] Built Nearby Emergency Services & Helplines (PRD Module 8):
+  - Direct dial helplines: Police (112 / 100), Ambulance (108 / 102), Women Helpline (1091), Fire (101).
+  - One-tap geo-targeted Google Maps searches for nearby hospitals, police stations, and fire stations centered on the user's current GPS location.
+- [x] Created automated test suite `tests/test_phase6_intelligent.py` (10/10 tests passing).
+- [x] Verified zero regressions across all 76 total automated checks.
 
 ---
 
 ### Phase 7: Production Deployment & Final Verification
-**Status:** ⬜ Not Started  
+**Status:** ⬜ Not Started (Awaiting Phase 6 Approval)  
 **Objective:** Prepare deployment configuration (Gunicorn, Render, environment variables, HTTPS/WSS), execute end-to-end integration tests, and finalize release.  
 **Depends on:** Phase 6 approval.
 
@@ -128,6 +152,6 @@ updated: 2026-11-10T10:33:00+05:30
 | **Phase 2** | Core System Stabilization | ✅ Complete | 100% |
 | **Phase 3** | Voice SOS Engine | ✅ Complete | 100% |
 | **Phase 4** | Emergency Notification Delivery | ✅ Complete | 100% |
-| **Phase 5** | Security Hardening, UI/UX & Live SMS | 🔄 Completed (Review) | 100% |
-| **Phase 6** | Intelligent Emergency Features | ⬜ Not Started | 0% |
+| **Phase 5** | Security Hardening, UI/UX & Live SMS | ✅ Complete | 100% |
+| **Phase 6** | Intelligent Emergency Features | 🔄 Completed (Review) | 100% |
 | **Phase 7** | Production Deployment & Final Verification | ⬜ Not Started | 0% |

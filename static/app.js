@@ -1766,6 +1766,11 @@ async function sendSosRequest(
 
         loadHistory();
 
+        const activeEventId = data.event_id || data.event?.id;
+        if (activeEventId) {
+            activateLiveEmergencyDashboard(activeEventId, data.event, data.tracking_url);
+        }
+
         setTimeout(
             () => {
 
@@ -2417,6 +2422,9 @@ async function loadContacts() {
                                 ${escapeHtml(
                                     contact.name
                                 )}
+                                <span class="tier-badge ${contact.priority === 3 ? 'tier-badge-3' : (contact.priority === 2 ? 'tier-badge-2' : 'tier-badge-1')}">
+                                    ${contact.priority === 3 ? 'Tier 3: Backup' : (contact.priority === 2 ? 'Tier 2: Escalation' : 'Tier 1: Primary')}
+                                </span>
 
                             </div>
 
@@ -2511,6 +2519,8 @@ if (contactForm) {
                     ?.value || "")
                     .trim() || null;
 
+            const priority =
+                parseInt(document.getElementById("contactPriority")?.value || "1", 10);
 
             try {
 
@@ -2530,7 +2540,8 @@ if (contactForm) {
                                 JSON.stringify({
                                     name,
                                     phone,
-                                    telegram_chat_id
+                                    telegram_chat_id,
+                                    priority
                                 })
                         }
                     );
@@ -3052,3 +3063,454 @@ async function checkExistingSession() {
    ============================================================ */
 
 checkExistingSession();
+
+
+/* ============================================================
+   PHASE 6: INTELLIGENT FEATURES — LIVE TRACKING & BREADCRUMBS
+   ============================================================ */
+
+let activeEmergencyId = null;
+let liveGeolocationWatchId = null;
+let breadcrumbStreamCount = 0;
+let escalationTimerInterval = null;
+let escalationSecondsRemaining = 60;
+let currentEscalationTier = 1;
+
+function activateLiveEmergencyDashboard(eventId, eventData, trackingUrl) {
+    activeEmergencyId = eventId;
+    breadcrumbStreamCount = 1;
+    escalationSecondsRemaining = 60;
+    currentEscalationTier = 1;
+
+    const panel = document.getElementById("activeEmergencyPanel");
+    if (panel) panel.classList.remove("hidden");
+
+    const idBadge = document.getElementById("activeEventIdBadge");
+    if (idBadge) idBadge.textContent = `Event #${eventId}`;
+
+    const tierBadge = document.getElementById("activeEscalationBadge");
+    if (tierBadge) tierBadge.textContent = "Tier 1: Primary";
+
+    const breadcrumbsCountElem = document.getElementById("activeBreadcrumbsCount");
+    if (breadcrumbsCountElem) breadcrumbsCountElem.textContent = "1 breadcrumb streamed";
+
+    const coordsText = document.getElementById("activeCoordinatesText");
+    if (coordsText) {
+        coordsText.textContent = (eventData?.latitude && eventData?.longitude)
+            ? `${eventData.latitude.toFixed(4)}, ${eventData.longitude.toFixed(4)}`
+            : "GPS fix pending...";
+    }
+
+    const trackingLink = document.getElementById("btnTrackingMapLink");
+    if (trackingLink) {
+        trackingLink.href = trackingUrl || `/api/sos/${eventId}/tracking`;
+    }
+
+    startLiveBreadcrumbsWatcher(eventId);
+    startEscalationCountdown(eventId);
+}
+
+function startLiveBreadcrumbsWatcher(eventId) {
+    if (liveGeolocationWatchId !== null) {
+        navigator.geolocation?.clearWatch(liveGeolocationWatchId);
+    }
+
+    if (!navigator.geolocation) return;
+
+    let lastStreamTime = 0;
+    liveGeolocationWatchId = navigator.geolocation.watchPosition(
+        async position => {
+            const now = Date.now();
+            if (now - lastStreamTime < 8000) return;
+            lastStreamTime = now;
+
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            const accuracy = position.coords.accuracy;
+            const speed = position.coords.speed;
+
+            try {
+                const res = await fetch(`/api/sos/${eventId}/location`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ latitude: lat, longitude: lng, accuracy, speed })
+                });
+
+                if (res.ok) {
+                    breadcrumbStreamCount++;
+                    const countElem = document.getElementById("activeBreadcrumbsCount");
+                    if (countElem) countElem.textContent = `${breadcrumbStreamCount} breadcrumbs streamed`;
+
+                    const coordsText = document.getElementById("activeCoordinatesText");
+                    if (coordsText) coordsText.textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)} (±${Math.round(accuracy)}m)`;
+                }
+            } catch (err) {
+                console.warn("Breadcrumb stream error:", err);
+            }
+        },
+        err => console.warn("Watch position error:", err),
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+    );
+}
+
+function startEscalationCountdown(eventId) {
+    if (escalationTimerInterval) clearInterval(escalationTimerInterval);
+
+    const countdownText = document.getElementById("escalationCountdownText");
+
+    escalationTimerInterval = setInterval(() => {
+        escalationSecondsRemaining--;
+        if (countdownText) {
+            countdownText.textContent = `Auto-escalating to Tier ${currentEscalationTier + 1} in ${escalationSecondsRemaining}s`;
+        }
+
+        if (escalationSecondsRemaining <= 0) {
+            clearInterval(escalationTimerInterval);
+            escalateEmergency(eventId);
+        }
+    }, 1000);
+}
+
+async function escalateEmergency(eventId) {
+    if (!eventId) eventId = activeEmergencyId;
+    if (!eventId) return;
+
+    try {
+        const res = await fetch(`/api/sos/${eventId}/escalate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" }
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+            currentEscalationTier = data.escalation_level;
+            const tierBadge = document.getElementById("activeEscalationBadge");
+            if (tierBadge) tierBadge.textContent = `Tier ${currentEscalationTier} Escalated`;
+
+            const statusText = document.getElementById("escalationStatusText");
+            if (statusText) statusText.textContent = `Tier ${currentEscalationTier} Escalated`;
+
+            const countdownText = document.getElementById("escalationCountdownText");
+            if (countdownText) countdownText.textContent = "Higher priority alert dispatched to next tier";
+
+            alert(`🚨 EMERGENCY ESCALATED!\n\nAlert level escalated to Tier ${currentEscalationTier}. Higher tier guardians have been notified.`);
+        } else {
+            alert(data.message || "Could not escalate alert.");
+        }
+    } catch (err) {
+        console.error("Escalation error:", err);
+    }
+}
+
+async function acknowledgeEmergency(eventId) {
+    if (!eventId) eventId = activeEmergencyId;
+    if (!eventId) return;
+
+    const responder = prompt("Enter responder or guardian name / unit:", "Responder On Scene");
+    if (!responder) return;
+
+    try {
+        const res = await fetch(`/api/sos/${eventId}/acknowledge`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ acknowledged_by: responder })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+            if (escalationTimerInterval) clearInterval(escalationTimerInterval);
+            const ackStatus = document.getElementById("acknowledgementStatusText");
+            if (ackStatus) ackStatus.textContent = "✅ Acknowledged";
+
+            const ackBy = document.getElementById("acknowledgedByText");
+            if (ackBy) ackBy.textContent = `By: ${escapeHtml(responder)}`;
+
+            const countdownText = document.getElementById("escalationCountdownText");
+            if (countdownText) countdownText.textContent = "Escalation halted (acknowledged)";
+
+            alert(`✅ EMERGENCY ACKNOWLEDGED!\n\nResponder recorded: ${responder}.\nFurther automatic escalations have been halted.`);
+        }
+    } catch (err) {
+        console.error("Acknowledge error:", err);
+    }
+}
+
+document.getElementById("btnManualEscalate")?.addEventListener("click", () => {
+    escalateEmergency(activeEmergencyId);
+});
+
+document.getElementById("btnAcknowledgeAlert")?.addEventListener("click", () => {
+    acknowledgeEmergency(activeEmergencyId);
+});
+
+
+/* ============================================================
+   PHASE 6: INTELLIGENT FALL & IMPACT DETECTION
+   ============================================================ */
+
+let fallCountdownInterval = null;
+let fallSecondsRemaining = 15;
+let audioCtx = null;
+
+function playWarningChime() {
+    try {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === "suspended") {
+            audioCtx.resume();
+        }
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.35);
+    } catch (e) {
+        // AudioContext may require user interaction
+    }
+}
+
+function launchFallPrompt() {
+    const modal = document.getElementById("fallModal");
+    if (!modal) return;
+
+    modal.classList.remove("hidden");
+    fallSecondsRemaining = 15;
+    const counter = document.getElementById("fallCountdownNumber");
+    if (counter) counter.textContent = fallSecondsRemaining;
+
+    playWarningChime();
+
+    if (fallCountdownInterval) clearInterval(fallCountdownInterval);
+    fallCountdownInterval = setInterval(() => {
+        fallSecondsRemaining--;
+        if (counter) counter.textContent = fallSecondsRemaining;
+        if (fallSecondsRemaining % 3 === 0) playWarningChime();
+
+        if (fallSecondsRemaining <= 0) {
+            clearInterval(fallCountdownInterval);
+            modal.classList.add("hidden");
+            triggerSOS("fall_detection");
+        }
+    }, 1000);
+}
+
+document.getElementById("btnFallCancel")?.addEventListener("click", () => {
+    if (fallCountdownInterval) clearInterval(fallCountdownInterval);
+    const modal = document.getElementById("fallModal");
+    if (modal) modal.classList.add("hidden");
+    alert("✅ Fall alarm cancelled. Recorded that you are safe!");
+});
+
+document.getElementById("btnFallSosNow")?.addEventListener("click", () => {
+    if (fallCountdownInterval) clearInterval(fallCountdownInterval);
+    const modal = document.getElementById("fallModal");
+    if (modal) modal.classList.add("hidden");
+    triggerSOS("fall_detection");
+});
+
+document.getElementById("btnSimulateFall")?.addEventListener("click", () => {
+    launchFallPrompt();
+});
+
+if (window.DeviceMotionEvent) {
+    let lastSpikeTime = 0;
+    window.addEventListener("devicemotion", event => {
+        const acc = event.accelerationIncludingGravity || event.acceleration;
+        if (!acc) return;
+        const mag = Math.sqrt((acc.x || 0)**2 + (acc.y || 0)**2 + (acc.z || 0)**2);
+        if (mag > 26 && Date.now() - lastSpikeTime > 20000) {
+            lastSpikeTime = Date.now();
+            console.warn("⚠️ Motion impact detected:", mag.toFixed(1), "m/s² — Launching Fall Verification.");
+            launchFallPrompt();
+        }
+    });
+}
+
+
+/* ============================================================
+   PHASE 6: SAFETY CHECK-IN TIMER
+   ============================================================ */
+
+let safetyCheckinInterval = null;
+
+async function initSafetyCheckin() {
+    try {
+        const res = await fetch("/api/safety-checkin/status");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.active && data.checkin) {
+            showActiveCheckinUI(data.checkin, data.remaining_seconds);
+        }
+    } catch (err) {
+        console.warn("Safety checkin init error:", err);
+    }
+}
+
+function showActiveCheckinUI(checkin, remainingSeconds) {
+    const setupBox = document.getElementById("checkinSetupBox");
+    const activeBox = document.getElementById("checkinActiveBox");
+    const badge = document.getElementById("checkinStatusBadge");
+    const noteElem = document.getElementById("checkinActiveNote");
+
+    if (setupBox) setupBox.classList.add("hidden");
+    if (activeBox) activeBox.classList.remove("hidden");
+    if (badge) {
+        badge.className = "sensor-badge active";
+        badge.textContent = "⏱️ Active Timer";
+    }
+    if (noteElem) {
+        noteElem.textContent = checkin.note ? `Note: "${escapeHtml(checkin.note)}"` : "No custom note attached";
+    }
+
+    startSafetyCheckinCountdown(remainingSeconds);
+}
+
+function startSafetyCheckinCountdown(totalSeconds) {
+    if (safetyCheckinInterval) clearInterval(safetyCheckinInterval);
+    let secondsLeft = Math.max(0, totalSeconds);
+
+    const display = document.getElementById("checkinTimeRemaining");
+
+    const updateDisplay = () => {
+        const mins = Math.floor(secondsLeft / 60);
+        const secs = secondsLeft % 60;
+        if (display) {
+            display.textContent = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+        }
+    };
+
+    updateDisplay();
+    safetyCheckinInterval = setInterval(async () => {
+        secondsLeft--;
+        updateDisplay();
+
+        if (secondsLeft <= 0) {
+            clearInterval(safetyCheckinInterval);
+            await triggerMissedCheckinAlert();
+        }
+    }, 1000);
+}
+
+async function triggerMissedCheckinAlert() {
+    alert("⚠️ SAFETY CHECK-IN TIMER EXPIRED!\n\nNo check-in received. Triggering automatic emergency SOS alert!");
+    try {
+        let lat = null;
+        let lng = null;
+        if (navigator.geolocation) {
+            try {
+                const pos = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000 });
+                });
+                lat = pos.coords.latitude;
+                lng = pos.coords.longitude;
+            } catch (e) {
+                // proceed without GPS
+            }
+        }
+
+        const res = await fetch("/api/safety-checkin/trigger-expired", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ latitude: lat, longitude: lng })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            alert(`🚨 EMERGENCY ACTIVATED FROM MISSED CHECK-IN!\n\nAlert Event #${data.event_id} dispatched to guardians.`);
+            resetCheckinUI();
+            loadHistory();
+        }
+    } catch (err) {
+        console.error("Expired checkin error:", err);
+    }
+}
+
+function resetCheckinUI() {
+    if (safetyCheckinInterval) clearInterval(safetyCheckinInterval);
+    const setupBox = document.getElementById("checkinSetupBox");
+    const activeBox = document.getElementById("checkinActiveBox");
+    const badge = document.getElementById("checkinStatusBadge");
+
+    if (setupBox) setupBox.classList.remove("hidden");
+    if (activeBox) activeBox.classList.add("hidden");
+    if (badge) {
+        badge.className = "sensor-badge standby";
+        badge.textContent = "Standby";
+    }
+}
+
+document.getElementById("btnStartCheckin")?.addEventListener("click", async () => {
+    const duration = document.getElementById("checkinDuration")?.value || 15;
+    const note = document.getElementById("checkinNote")?.value || "";
+
+    try {
+        const res = await fetch("/api/safety-checkin/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ duration_minutes: parseInt(duration, 10), note })
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showActiveCheckinUI(data.checkin, parseInt(duration, 10) * 60);
+            alert(`⏱️ Safety Timer Activated for ${duration} minutes!\n\nRemember to tap "I Am Safe" when you reach your destination.`);
+        } else {
+            alert(data.message || "Failed to start timer.");
+        }
+    } catch (err) {
+        console.error("Start checkin error:", err);
+    }
+});
+
+document.getElementById("btnConfirmSafe")?.addEventListener("click", async () => {
+    try {
+        const res = await fetch("/api/safety-checkin/checkin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" }
+        });
+        const data = await res.json();
+        if (res.ok) {
+            resetCheckinUI();
+            alert("✅ CHECK-IN CONFIRMED!\n\nYou are safely recorded as arrived. Timer stopped.");
+        }
+    } catch (err) {
+        console.error("Confirm checkin error:", err);
+    }
+});
+
+document.getElementById("btnCancelCheckin")?.addEventListener("click", () => {
+    if (confirm("Cancel this safety check-in timer?")) {
+        resetCheckinUI();
+    }
+});
+
+
+/* ============================================================
+   PHASE 6: NEARBY EMERGENCY SERVICES & HELPLINES
+   ============================================================ */
+
+function initNearbyServices() {
+    document.getElementById("btnNearbyHospitals")?.addEventListener("click", () => {
+        if (userLocation?.latitude && userLocation?.longitude) {
+            window.open(`https://www.google.com/maps/search/hospital/@${userLocation.latitude},${userLocation.longitude},14z`, "_blank");
+        } else {
+            window.open("https://www.google.com/maps/search/hospital", "_blank");
+        }
+    });
+
+    document.getElementById("btnNearbyPolice")?.addEventListener("click", () => {
+        if (userLocation?.latitude && userLocation?.longitude) {
+            window.open(`https://www.google.com/maps/search/police+station/@${userLocation.latitude},${userLocation.longitude},14z`, "_blank");
+        } else {
+            window.open("https://www.google.com/maps/search/police+station", "_blank");
+        }
+    });
+}
+
+initNearbyServices();
+setTimeout(() => initSafetyCheckin(), 1000);

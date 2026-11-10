@@ -481,10 +481,168 @@
             </button>
 
             <div class="trigger-info">
-                ✋ Hand Gesture &nbsp; • &nbsp; 🔴 Manual Button &nbsp; • &nbsp; 🎤 Voice Commands
+                ✋ Hand Gesture &nbsp; • &nbsp; 🔴 Manual Button &nbsp; • &nbsp; 🎤 Voice Commands &nbsp; • &nbsp; 🚶‍♂️ Fall Detection &nbsp; • &nbsp; ⏱️ Safety Check-in
             </div>
 
         </section>
+
+
+        <!-- ================= PHASE 6: ACTIVE EMERGENCY & LIVE TRACKING PANEL ================= -->
+
+        <section id="activeEmergencyPanel" class="panel emergency-active-panel hidden">
+
+            <div class="emergency-active-header">
+                <div>
+                    <span class="pulse-dot"></span>
+                    <h3 id="activeEmergencyHeading">🚨 Active Emergency In Progress</h3>
+                    <p id="activeEmergencySubtitle">Live multi-channel emergency alert dispatched to guardians and responders.</p>
+                </div>
+                <div class="emergency-active-badges">
+                    <span id="activeEventIdBadge" class="badge-pill">Event #--</span>
+                    <span id="activeEscalationBadge" class="badge-pill tier-pill">Tier 1 Primary</span>
+                </div>
+            </div>
+
+            <div class="emergency-active-grid">
+                <div class="active-metric-card">
+                    <span class="metric-label">📍 Live GPS Stream</span>
+                    <strong id="activeBreadcrumbsCount">1 breadcrumb</strong>
+                    <small id="activeCoordinatesText">Streaming coordinates...</small>
+                </div>
+
+                <div class="active-metric-card">
+                    <span class="metric-label">⏱️ Escalation Status</span>
+                    <strong id="escalationStatusText">Tier 1 Notified</strong>
+                    <small id="escalationCountdownText">Auto-escalating to Tier 2 in 60s</small>
+                </div>
+
+                <div class="active-metric-card">
+                    <span class="metric-label">🛡️ Acknowledgement</span>
+                    <strong id="acknowledgementStatusText">Awaiting Response</strong>
+                    <small id="acknowledgedByText">Unacknowledged</small>
+                </div>
+            </div>
+
+            <div class="emergency-active-actions">
+                <button id="btnManualEscalate" class="btn btn-warning-action" type="button">
+                    ⚡ Escalate to Next Tier Now
+                </button>
+                <button id="btnAcknowledgeAlert" class="btn btn-success-action" type="button">
+                    ✅ Acknowledge / Responder On Scene
+                </button>
+                <a id="btnTrackingMapLink" href="#" target="_blank" class="btn btn-outline-action">
+                    🗺️ Open Live Tracking Trail
+                </a>
+            </div>
+
+        </section>
+
+
+        <!-- ================= PHASE 6: INTELLIGENT EMERGENCY SUITE ================= -->
+
+        <div class="intelligent-grid">
+
+            <!-- 1. FALL & IMPACT DETECTION -->
+            <section class="panel intelligent-card">
+                <div class="panel-heading">
+                    <div>
+                        <h3>🚶‍♂️ Intelligent Fall Detection</h3>
+                        <p class="intelligent-subtitle">Real-time motion & acceleration spike sensor analysis</p>
+                    </div>
+                    <span id="fallSensorBadge" class="sensor-badge armed">🟢 Armed</span>
+                </div>
+
+                <p class="intelligent-desc">
+                    Monitors device motion for high-G impact shocks followed by immobility. Displays a 15-second audible safety prompt before automatically sounding the alarm.
+                </p>
+
+                <div class="intelligent-actions">
+                    <button id="btnSimulateFall" class="btn btn-simulate-fall" type="button">
+                        ⚡ Simulate / Test Fall Trigger
+                    </button>
+                    <span class="sensor-note">Works automatically via DeviceMotionEvent on supported mobile hardware</span>
+                </div>
+            </section>
+
+            <!-- 2. SAFETY CHECK-IN TIMER -->
+            <section class="panel intelligent-card">
+                <div class="panel-heading">
+                    <div>
+                        <h3>⏱️ Safety Check-in Timer</h3>
+                        <p class="intelligent-subtitle">Periodic welfare check-in / dead-man's switch</p>
+                    </div>
+                    <span id="checkinStatusBadge" class="sensor-badge standby">Standby</span>
+                </div>
+
+                <p class="intelligent-desc">
+                    Traveling alone or in an unfamiliar area? Start a safety timer. If you don't check in before it expires, automatic multi-channel emergency SOS is sent.
+                </p>
+
+                <div id="checkinSetupBox" class="checkin-setup-box">
+                    <div class="checkin-inputs">
+                        <select id="checkinDuration" class="checkin-select">
+                            <option value="15">15 Minutes (Short Walk)</option>
+                            <option value="30">30 Minutes (Commute)</option>
+                            <option value="60">1 Hour (Evening Trip)</option>
+                            <option value="120">2 Hours (Long Trip)</option>
+                        </select>
+                        <input
+                            type="text"
+                            id="checkinNote"
+                            class="checkin-note-input"
+                            placeholder="Optional note (e.g. Walking home from metro)"
+                            maxlength="120"
+                        >
+                    </div>
+                    <button id="btnStartCheckin" class="btn btn-checkin-start" type="button">
+                        ⏱️ Start Safety Timer
+                    </button>
+                </div>
+
+                <div id="checkinActiveBox" class="checkin-active-box hidden">
+                    <div class="checkin-timer-display">
+                        <span class="timer-clock">⏱️</span>
+                        <span id="checkinTimeRemaining" class="timer-numbers">15:00</span>
+                    </div>
+                    <p id="checkinActiveNote" class="checkin-active-note">Note: Walking home</p>
+                    <div class="checkin-active-actions">
+                        <button id="btnConfirmSafe" class="btn btn-confirm-safe" type="button">
+                            ✅ I Am Safe (Check In)
+                        </button>
+                        <button id="btnCancelCheckin" class="btn btn-cancel-checkin" type="button">
+                            Cancel Timer
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. NEARBY EMERGENCY SERVICES & HELPLINES -->
+            <section class="panel intelligent-card">
+                <div class="panel-heading">
+                    <div>
+                        <h3>🏥 Emergency Helplines & Nearby Services</h3>
+                        <p class="intelligent-subtitle">One-tap direct dial helplines and geo-targeted hospital/police lookup</p>
+                    </div>
+                </div>
+
+                <div class="helpline-pills">
+                    <a href="tel:112" class="helpline-pill police">🚨 Police (112 / 100)</a>
+                    <a href="tel:108" class="helpline-pill ambulance">🚑 Ambulance (108 / 102)</a>
+                    <a href="tel:1091" class="helpline-pill women">🛡️ Women Helpline (1091)</a>
+                    <a href="tel:101" class="helpline-pill fire">🚒 Fire Service (101)</a>
+                </div>
+
+                <div class="nearby-search-actions">
+                    <button id="btnNearbyHospitals" class="btn btn-nearby-resource" type="button">
+                        🏥 Find Nearby Hospitals
+                    </button>
+                    <button id="btnNearbyPolice" class="btn btn-nearby-resource" type="button">
+                        🚓 Find Nearby Police Stations
+                    </button>
+                </div>
+            </section>
+
+        </div>
 
 
         <!-- ================= GRID ================= -->
@@ -526,6 +684,12 @@
                         id="contactTelegram"
                         placeholder="Telegram Chat ID or @username (optional)"
                     >
+
+                    <select id="contactPriority" class="contact-priority-select">
+                        <option value="1">Tier 1 — Primary (Immediate Alert)</option>
+                        <option value="2">Tier 2 — Secondary (Escalation)</option>
+                        <option value="3">Tier 3 — Backup (Critical Escalation)</option>
+                    </select>
 
                     <button type="submit" id="addContactBtn">
                         + Add Guardian Contact
@@ -609,6 +773,57 @@
 
     </div>
 
+</div>
+
+
+<!-- ================= PHASE 6: FALL CONFIRMATION MODAL ================= -->
+
+<div
+    id="fallModal"
+    class="modal-overlay hidden"
+>
+    <div class="modal fall-modal">
+        <div class="warning-icon fall-pulse">
+            ⚠️
+        </div>
+
+        <h2>POTENTIAL FALL DETECTED!</h2>
+
+        <p class="fall-prompt">
+            A sudden impact or rapid fall movement was detected.
+            Are you injured or in need of emergency assistance?
+        </p>
+
+        <div class="fall-countdown-wrapper">
+            <p>Automatic emergency SOS dispatch in:</p>
+            <div
+                id="fallCountdownNumber"
+                class="countdown fall-counter"
+            >
+                15
+            </div>
+            <p class="fall-subtext">If you are safe, press "I Am OK" immediately.</p>
+        </div>
+
+        <div class="fall-modal-actions">
+            <button
+                id="btnFallCancel"
+                class="btn btn-fall-cancel"
+                type="button"
+                aria-label="Cancel Fall Alert, I Am OK"
+            >
+                ✅ I AM OK (CANCEL)
+            </button>
+            <button
+                id="btnFallSosNow"
+                class="btn btn-fall-sos"
+                type="button"
+                aria-label="Confirm Fall, Send Emergency SOS Now"
+            >
+                🚨 I NEED HELP (SOS NOW)
+            </button>
+        </div>
+    </div>
 </div>
 
 </body>

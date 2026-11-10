@@ -1,7 +1,7 @@
 import os
 import sys
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 # Ensure backend directory is in sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -32,6 +32,15 @@ from database import (
     create_sos_event,
     get_sos_events,
     get_notification_logs,
+    add_breadcrumb,
+    get_breadcrumbs,
+    get_sos_event_by_id,
+    acknowledge_sos_event,
+    escalate_sos_event_level,
+    create_safety_checkin,
+    get_active_safety_checkin,
+    complete_safety_checkin,
+    get_contacts_by_priority
 )
 
 from notifications import notification_service
@@ -701,6 +710,14 @@ def create_contact():
             ) or ""
         ).strip() or None
 
+        raw_priority = data.get("priority", 1)
+        try:
+            priority = int(raw_priority)
+            if priority not in [1, 2, 3]:
+                priority = 1
+        except (ValueError, TypeError):
+            priority = 1
+
 
         if not name or len(name) < 1 or len(name) > 60:
 
@@ -758,7 +775,9 @@ def create_contact():
 
             phone,
 
-            telegram_chat_id
+            telegram_chat_id,
+
+            priority
         )
 
 
@@ -1016,10 +1035,11 @@ def sos():
         if trigger_type == "button":
             trigger_type = "manual"
 
-        if trigger_type not in ["manual", "hand_gesture", "voice"]:
+        ALLOWED_TRIGGERS = {"manual", "hand_gesture", "voice", "fall_detection", "safety_checkin"}
+        if trigger_type not in ALLOWED_TRIGGERS:
             return jsonify({
                 "success": False,
-                "message": "Invalid trigger_type. Must be manual, hand_gesture, or voice"
+                "message": "Invalid trigger_type. Must be manual, hand_gesture, voice, fall_detection, or safety_checkin"
             }), 400
 
 
@@ -1059,6 +1079,19 @@ def sos():
 
             status
         )
+
+        # Record initial location breadcrumb if GPS available
+        if has_location:
+            try:
+                add_breadcrumb(
+                    event_id,
+                    latitude,
+                    longitude,
+                    accuracy=data.get("accuracy"),
+                    speed=data.get("speed")
+                )
+            except Exception as e_bc:
+                print(f"Initial breadcrumb error: {e_bc}")
 
 
         # ----------------------------------------------------
@@ -1157,6 +1190,9 @@ def sos():
 
             "event_id":
                 event_id,
+
+            "tracking_url":
+                f"/api/sos/{event_id}/tracking",
 
             "event": {
 
@@ -1264,6 +1300,299 @@ def sos_history():
                 "Failed to load SOS history"
 
         }), 500
+
+
+# ============================================================
+# PHASE 6: INTELLIGENT FEATURES — LIVE TRACKING & BREADCRUMBS
+# ============================================================
+
+@app.route(
+    "/api/sos/<int:event_id>/location",
+    methods=["POST"]
+)
+def update_sos_location(event_id):
+    """
+    Continuous live location streaming endpoint.
+    Appends location breadcrumb to active emergency event.
+    """
+    event = get_sos_event_by_id(event_id)
+    if not event:
+        return jsonify({"success": False, "message": "SOS event not found"}), 404
+
+    data = request.get_json() or {}
+    lat = data.get("latitude")
+    lng = data.get("longitude")
+    accuracy = data.get("accuracy")
+    speed = data.get("speed")
+
+    if lat is None or lng is None:
+        return jsonify({"success": False, "message": "latitude and longitude required"}), 400
+
+    try:
+        lat_f = float(lat)
+        lng_f = float(lng)
+        if not (-90 <= lat_f <= 90 and -180 <= lng_f <= 180):
+            return jsonify({"success": False, "message": "Coordinates out of bounds"}), 400
+    except (ValueError, TypeError):
+        return jsonify({"success": False, "message": "Invalid numeric coordinates"}), 400
+
+    breadcrumb_id = add_breadcrumb(event_id, lat_f, lng_f, accuracy=accuracy, speed=speed)
+    maps_url = f"https://www.google.com/maps?q={lat_f},{lng_f}"
+
+    return jsonify({
+        "success": True,
+        "event_id": event_id,
+        "breadcrumb_id": breadcrumb_id,
+        "latitude": lat_f,
+        "longitude": lng_f,
+        "maps_url": maps_url,
+        "recorded_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }), 200
+
+
+@app.route(
+    "/api/sos/<int:event_id>/tracking",
+    methods=["GET"]
+)
+def get_sos_tracking(event_id):
+    """
+    Live emergency tracking view for responders and guardians.
+    Returns latest GPS pin, breadcrumb history, trigger type, and status.
+    """
+    event = get_sos_event_by_id(event_id)
+    if not event:
+        return jsonify({"success": False, "message": "SOS event not found"}), 404
+
+    user = get_user_by_id(event["user_id"])
+    breadcrumbs = get_breadcrumbs(event_id)
+
+    return jsonify({
+        "success": True,
+        "event_id": event_id,
+        "user_name": user["name"] if user else "SOS User",
+        "trigger_type": event["trigger_type"],
+        "status": event["status"],
+        "escalation_level": event.get("escalation_level", 1),
+        "acknowledged_at": event.get("acknowledged_at"),
+        "acknowledged_by": event.get("acknowledged_by"),
+        "latest_location": {
+            "latitude": event["latitude"],
+            "longitude": event["longitude"],
+            "maps_url": event["maps_url"]
+        },
+        "breadcrumbs_count": len(breadcrumbs),
+        "breadcrumbs": breadcrumbs,
+        "created_at": event["created_at"]
+    }), 200
+
+
+# ============================================================
+# PHASE 6: EMERGENCY ACKNOWLEDGEMENT & ESCALATION
+# ============================================================
+
+@app.route(
+    "/api/sos/<int:event_id>/acknowledge",
+    methods=["POST"]
+)
+def acknowledge_sos(event_id):
+    """
+    Acknowledge receipt of emergency alert by a guardian or responder.
+    Halts further escalation.
+    """
+    event = get_sos_event_by_id(event_id)
+    if not event:
+        return jsonify({"success": False, "message": "SOS event not found"}), 404
+
+    data = request.get_json() or {}
+    acknowledged_by = (data.get("acknowledged_by") or "Guardian").strip()[:80]
+
+    acknowledge_sos_event(event_id, acknowledged_by=acknowledged_by)
+    updated_event = get_sos_event_by_id(event_id)
+
+    return jsonify({
+        "success": True,
+        "message": f"Emergency alert acknowledged by {acknowledged_by}",
+        "event": updated_event
+    }), 200
+
+
+@app.route(
+    "/api/sos/<int:event_id>/escalate",
+    methods=["POST"]
+)
+def escalate_sos(event_id):
+    """
+    Escalate unacknowledged emergency alert to higher priority contacts.
+    """
+    rate_resp = check_rate_limit(f"escalate:{event_id}", max_requests=5, window_seconds=60)
+    if rate_resp:
+        return rate_resp
+
+    event = get_sos_event_by_id(event_id)
+    if not event:
+        return jsonify({"success": False, "message": "SOS event not found"}), 404
+
+    if event.get("status") == "acknowledged":
+        return jsonify({
+            "success": False,
+            "message": "Emergency event has already been acknowledged."
+        }), 400
+
+    new_level = escalate_sos_event_level(event_id)
+    user = get_user_by_id(event["user_id"])
+    user_name = user["name"] if user else "SOS Guardian User"
+
+    # Query contacts: prefer secondary/backup tiers if defined, else all contacts
+    tier_contacts = get_contacts_by_priority(event["user_id"], priority=min(new_level, 3))
+    if not tier_contacts:
+        tier_contacts = get_contacts(event["user_id"])
+
+    report = notification_service.send_escalation_alerts(
+        sos_event_id=event_id,
+        user_name=user_name,
+        escalation_level=new_level,
+        latitude=event["latitude"],
+        longitude=event["longitude"],
+        maps_url=event["maps_url"],
+        contacts=tier_contacts
+    )
+
+    return jsonify({
+        "success": True,
+        "event_id": event_id,
+        "escalation_level": new_level,
+        "dispatches": report.get("dispatches", [])
+    }), 200
+
+
+# ============================================================
+# PHASE 6: SAFETY CHECK-IN TIMER
+# ============================================================
+
+@app.route(
+    "/api/safety-checkin/start",
+    methods=["POST"]
+)
+@login_required
+def start_safety_checkin():
+    """Start a periodic welfare / safety check-in timer."""
+    data = request.get_json() or {}
+    duration = data.get("duration_minutes", 15)
+    note = (data.get("note") or "").strip()[:200]
+
+    try:
+        dur_int = int(duration)
+        if dur_int < 1 or dur_int > 1440:
+            return jsonify({"success": False, "message": "Duration must be between 1 and 1440 minutes"}), 400
+    except (ValueError, TypeError):
+        return jsonify({"success": False, "message": "Invalid duration"}), 400
+
+    checkin = create_safety_checkin(session["user_id"], dur_int, note=note)
+    return jsonify({"success": True, "checkin": checkin}), 201
+
+
+@app.route(
+    "/api/safety-checkin/status",
+    methods=["GET"]
+)
+@login_required
+def safety_checkin_status():
+    """Get active safety checkin for the authenticated user."""
+    checkin = get_active_safety_checkin(session["user_id"])
+    if not checkin:
+        return jsonify({"success": True, "active": False, "checkin": None}), 200
+
+    exp_dt = datetime.strptime(checkin["expires_at"], "%Y-%m-%d %H:%M:%S")
+    remaining_seconds = max(0, int((exp_dt - datetime.now()).total_seconds()))
+
+    return jsonify({
+        "success": True,
+        "active": True,
+        "checkin": checkin,
+        "remaining_seconds": remaining_seconds,
+        "is_expired": remaining_seconds == 0
+    }), 200
+
+
+@app.route(
+    "/api/safety-checkin/checkin",
+    methods=["POST"]
+)
+@login_required
+def confirm_safety_checkin():
+    """User confirms they are safe, completing the check-in."""
+    checkin = get_active_safety_checkin(session["user_id"])
+    if not checkin:
+        return jsonify({"success": False, "message": "No active safety check-in found"}), 404
+
+    complete_safety_checkin(checkin["id"], session["user_id"], status="checked_in")
+    return jsonify({
+        "success": True,
+        "message": "Safety check-in completed. You are recorded as safe."
+    }), 200
+
+
+@app.route(
+    "/api/safety-checkin/trigger-expired",
+    methods=["POST"]
+)
+@login_required
+def trigger_expired_checkin():
+    """
+    Triggered when a safety checkin timer expires without user confirmation.
+    Dispatches emergency SOS alert with 'safety_checkin' trigger.
+    """
+    checkin = get_active_safety_checkin(session["user_id"])
+    data = request.get_json() or {}
+    lat = data.get("latitude")
+    lng = data.get("longitude")
+
+    note_text = f" (Note: {checkin['note']})" if checkin and checkin.get("note") else ""
+    user = get_user_by_id(session["user_id"])
+    user_name = user["name"] if user else "SOS Guardian User"
+
+    has_loc = False
+    maps_url = None
+    if lat is not None and lng is not None:
+        try:
+            lat_f = float(lat)
+            lng_f = float(lng)
+            if -90 <= lat_f <= 90 and -180 <= lng_f <= 180:
+                has_loc = True
+                maps_url = f"https://www.google.com/maps?q={lat_f},{lng_f}"
+        except (ValueError, TypeError):
+            pass
+
+    event_id = create_sos_event(
+        session["user_id"],
+        float(lat) if has_loc else None,
+        float(lng) if has_loc else None,
+        maps_url,
+        "safety_checkin",
+        "received"
+    )
+
+    if checkin:
+        complete_safety_checkin(checkin["id"], session["user_id"], status="expired_triggered")
+
+    contacts = get_contacts(session["user_id"])
+    delivery_report = notification_service.send_emergency_alerts(
+        sos_event_id=event_id,
+        user_name=f"{user_name} [Missed Safety Check-in{note_text}]",
+        trigger_type="safety_checkin",
+        latitude=float(lat) if has_loc else None,
+        longitude=float(lng) if has_loc else None,
+        maps_url=maps_url,
+        contacts=contacts,
+        user_id=session["user_id"]
+    )
+
+    return jsonify({
+        "success": True,
+        "message": "Emergency alert triggered due to missed safety check-in",
+        "event_id": event_id,
+        "delivery": delivery_report
+    }), 200
 
 
 # ============================================================

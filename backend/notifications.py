@@ -17,6 +17,24 @@ from providers.fcm_provider import fcm_provider
 from database import log_notification, update_sos_event_status, get_contacts as db_get_contacts
 
 
+def format_escalation_sms(user_name, escalation_level, maps_url=None, latitude=None, longitude=None):
+    """Format emergency escalation SMS when primary contacts do not acknowledge."""
+    if latitude is not None and longitude is not None:
+        pin_url = f"https://www.google.com/maps?q={latitude},{longitude}"
+        loc_text = f"📍 Location:\n{pin_url}"
+    elif maps_url:
+        loc_text = f"📍 Location:\n{maps_url}"
+    else:
+        loc_text = "📍 Location: GPS Unavailable"
+
+    return (
+        f"🚨 SOS ESCALATION ALERT (Tier {escalation_level})!\n\n"
+        f"CRITICAL: Distress signal from {user_name} was NOT yet acknowledged by initial contacts!\n\n"
+        f"{loc_text}\n\n"
+        f"Immediate assistance needed. Please check on this person or call emergency responders!"
+    )
+
+
 class NotificationService:
     """
     Central emergency notification orchestrator.
@@ -266,6 +284,101 @@ class NotificationService:
             results["telegram"] = self.telegram.send_message(telegram_chat_id, test_tg)
 
         return results
+
+    def send_escalation_alerts(
+        self,
+        sos_event_id,
+        user_name,
+        escalation_level,
+        latitude,
+        longitude,
+        maps_url,
+        contacts
+    ):
+        """
+        Dispatch escalated emergency alerts to contacts when primary contacts fail to acknowledge.
+        """
+        if not contacts:
+            return {
+                "success": False,
+                "message": "No contacts configured for escalation.",
+                "dispatches": []
+            }
+
+        sms_body = format_escalation_sms(
+            user_name,
+            escalation_level,
+            maps_url=maps_url,
+            latitude=latitude,
+            longitude=longitude
+        )
+
+        loc_html = f'<a href="{maps_url}">🗺️ Open in Google Maps</a>\n<code>Coordinates: {latitude}, {longitude}</code>' if maps_url else '<i>⚠️ Location unavailable</i>'
+        telegram_body = (
+            f"🚨 <b>SOS ESCALATION ALERT (Tier {escalation_level})!</b>\n\n"
+            f"⚠️ <b>CRITICAL:</b> Distress signal from <b>{user_name}</b> was not yet acknowledged by initial contacts!\n\n"
+            f"<b>📍 Emergency Location:</b>\n"
+            f"{loc_html}\n\n"
+            f"⚠️ <b>Action Required:</b> Please check on this person immediately or contact emergency responders!"
+        )
+
+        dispatches = []
+        for contact in contacts:
+            contact_id = contact.get("id")
+            contact_name = contact.get("name", "Unknown Contact")
+            phone = contact.get("phone")
+            telegram_chat_id = contact.get("telegram_chat_id")
+
+            contact_dispatch = {
+                "contact_id": contact_id,
+                "name": contact_name,
+                "phone": phone,
+                "telegram_chat_id": telegram_chat_id,
+                "channels": {}
+            }
+
+            if phone:
+                try:
+                    res = self.sms.send_sms(phone, sms_body)
+                    st = res.get("status", "sent" if res.get("success") else "failed")
+                    contact_dispatch["channels"]["sms"] = {"status": st, "provider": res.get("provider", "mock")}
+                    if sos_event_id:
+                        log_notification(
+                            sos_event_id=sos_event_id,
+                            contact_id=contact_id,
+                            channel="sms_escalation",
+                            recipient=phone,
+                            status=st,
+                            provider=res.get("provider", "mock")
+                        )
+                except Exception as ex:
+                    contact_dispatch["channels"]["sms"] = {"status": "failed", "error": str(ex)}
+
+            if telegram_chat_id:
+                try:
+                    res_tg = self.telegram.send_message(telegram_chat_id, telegram_body)
+                    st_tg = res_tg.get("status", "sent" if res_tg.get("success") else "failed")
+                    contact_dispatch["channels"]["telegram"] = {"status": st_tg, "provider": "telegram"}
+                    if sos_event_id:
+                        log_notification(
+                            sos_event_id=sos_event_id,
+                            contact_id=contact_id,
+                            channel="telegram_escalation",
+                            recipient=telegram_chat_id,
+                            status=st_tg,
+                            provider="telegram"
+                        )
+                except Exception as ex:
+                    contact_dispatch["channels"]["telegram"] = {"status": "failed", "error": str(ex)}
+
+            dispatches.append(contact_dispatch)
+
+        return {
+            "success": True,
+            "escalation_level": escalation_level,
+            "total_contacts": len(contacts),
+            "dispatches": dispatches
+        }
 
     def send_sms(self, phone, message):
         """Backward-compatible helper method."""

@@ -1,5 +1,5 @@
 ---
-updated: 2026-11-10T10:32:00+05:30
+updated: 2026-11-10T10:44:00+05:30
 ---
 
 # Project State — SOS Guardian
@@ -7,47 +7,56 @@ updated: 2026-11-10T10:32:00+05:30
 ## Current Position
 
 **Milestone:** Core Delivery 1.0.0  
-**Phase:** Phase 5 — Security Hardening & UI/UX Polish (including Automatic SMS Integration)  
-**Status:** Completed (Awaiting Phase 5 Approval to proceed to Phase 6)  
-**Plan:** End-to-End Automatic Live/Mock SMS Integration, Fast2SMS Quick Route, 10-Digit Mobile Input, Clickable Maps Pin, Rate Limiting, Security Headers, and Readiness Matrix Implemented & Verified  
+**Phase:** Phase 6 — Intelligent Emergency Features  
+**Status:** Completed (Awaiting Phase 6 Approval to proceed to Phase 7)  
+**Plan:** Intelligent Fall & Impact Detection, Live Location Breadcrumbs Tracking, Multi-Contact Tier Escalation, Safety Check-in Timer, and Emergency Helplines Implemented & Verified  
 
 ---
 
 ## Last Action Completed
 
-1. End-to-End Automatic SMS Alert Integration:
-   - Added Guardian contact input form in `templates/index.html` allowing entry of Guardian name and 10-digit mobile number, saving directly to SQLite `emergency_contacts` table via `POST /api/contacts`. Explicitly verified recipient requires NO app or registration.
-   - Wired up Fast2SMS using Quick SMS route (`route="q"`) in `backend/providers/sms_provider.py` to utilize free trial signup credits for live phone delivery.
-   - Built `clean_phone_number` sanitizing numbers to 10 digits (stripping `+91`, `91`, or leading `0`).
-   - Configured `SMS_PROVIDER=mock` as default in `.env` to prevent burning live credits during test runs, with 1-step switch to `fast2sms`.
-   - On SOS alert trigger, pulled saved numbers from SQLite and dispatched SMS alerts formatted with clickable Google Maps pin: `https://www.google.com/maps?q=LAT,LONG` (or `'GPS Unavailable'`).
-   - Added persistent auditing in `notification_logs` table.
-   - Created standalone verification script `tests/verify_sms_e2e.py` confirming web contact creation -> SQLite storage -> SOS activation -> automatic SMS dispatch.
-2. Security Hardening & Rate Limiting:
-   - Implemented thread-safe sliding-window rate limiter (`backend/rate_limiter.py`) protecting login, registration, SOS trigger, and contact test.
-   - Hardened session cookies (`HttpOnly=True`, `SameSite=Lax`).
-   - Injected OWASP security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `X-XSS-Protection: 1; mode=block`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`).
-   - Enforced strict server-side input validation and cross-user data isolation.
-3. UI/UX Polish:
-   - Built live 4-sensor System Readiness Matrix in `templates/index.html` and `static/app.js` with dynamic state transitions.
-   - Enhanced mobile touch targets (44px min) and accessibility `aria-label` tags.
-4. Validation:
-   - 15/15 notification tests passed (`tests/test_notifications.py`).
-   - 10/10 security tests passed (`tests/test_phase5_security.py`).
-   - 7/7 backend tests passed (`tests/test_phase2_backend.py`).
-   - 27/27 voice tests passed (`tests/test_voice_matching.js`).
-   - 4/4 gesture math tests passed (`tests/test_gesture_math.js`).
+1. Built Intelligent Fall & Impact Detection:
+   - Evaluates motion acceleration via `DeviceMotionEvent` on client-side browser.
+   - Fall Confirmation Modal (`#fallModal`) provides a 15-second audible safety prompt countdown before alarm dispatch.
+   - Added test trigger button (`#btnSimulateFall`) for user verification.
+   - Added `'fall_detection'` trigger modality to central backend SOS pipeline.
+2. Built Continuous Live Location Tracking & Breadcrumbs Streaming:
+   - Added `sos_location_breadcrumbs` table in SQLite (`data/sos_guardian.db`).
+   - Added `POST /api/sos/<id>/location` streaming real-time GPS breadcrumbs (latitude, longitude, accuracy, speed).
+   - Added `GET /api/sos/<id>/tracking` returning live coordinates, maps pin, and breadcrumb history.
+   - Implemented high-accuracy background watcher in `static/app.js` (`watchPosition`).
+3. Built Multi-Contact Sequential Escalation & Emergency Acknowledgement:
+   - Extended `emergency_contacts` schema with `priority` (Tier 1 Primary, Tier 2 Secondary, Tier 3 Backup).
+   - Extended `sos_events` schema with `escalation_level`, `acknowledged_at`, `acknowledged_by`.
+   - Built `POST /api/sos/<id>/escalate` auto-escalating to higher priority contacts with custom escalation alerts.
+   - Built `POST /api/sos/<id>/acknowledge` allowing responders or guardians to confirm receipt and halt further escalation.
+4. Built Safety Check-in Timer (Dead Man's Switch / Periodic Welfare Check):
+   - Added `safety_checkins` table in SQLite.
+   - Implemented `POST /api/safety-checkin/start`, `GET /api/safety-checkin/status`, `POST /api/safety-checkin/checkin`, and `POST /api/safety-checkin/trigger-expired`.
+   - Integrated live countdown clock and automated SOS trigger in dashboard.
+5. Built Nearby Emergency Services & Helplines:
+   - Added quick-dial pills for Police (112 / 100), Ambulance (108 / 102), Women Helpline (1091), Fire (101).
+   - Added one-tap geo-targeted Google Maps searches for nearby hospitals and police stations centered on live GPS coordinates.
+6. Validation:
+   - 10/10 Phase 6 intelligent tests passed (`tests/test_phase6_intelligent.py`).
+   - 10/10 Phase 5 security tests passed (`tests/test_phase5_security.py`).
+   - 15/15 Phase 4 notification tests passed (`tests/test_notifications.py`).
+   - 7/7 Phase 2 backend tests passed (`tests/test_phase2_backend.py`).
    - 1/1 standalone E2E SMS verification passed (`tests/verify_sms_e2e.py`).
-   - Total 66/66 automated checks passed (100%).
+   - 27/27 voice matching tests passed (`tests/test_voice_matching.js`).
+   - 4/4 gesture math tests passed (`tests/test_gesture_math.js`).
+   - Static syntax & compilation checks passed (2/2).
+   - Total 76 automated checks passed (100%).
 
 ---
 
 ## Next Steps
 
-1. Await explicit user approval command: `APPROVE PHASE 5`.
-2. Upon approval, begin **Phase 6: Intelligent Emergency Features**:
-   - Explore and prototype advanced intelligent features: fall detection via pose estimation, live location tracking, and multi-contact escalation.
-   - Maintain client-side browser execution for vision/sensor intelligence.
+1. Await explicit user approval command: `APPROVE PHASE 6`.
+2. Upon approval, begin **Phase 7: Production Deployment & Final Verification**:
+   - Production WSGI configuration (Gunicorn / Waitress).
+   - Render / cloud hosting deployment configuration.
+   - Production environment variables, SSL/HTTPS termination, and final release verification.
 
 ---
 
@@ -55,25 +64,20 @@ updated: 2026-11-10T10:32:00+05:30
 
 | Decision | Choice | Made | Affects |
 |---|---|---|---|
-| Server Gesture Detection Deprecation | Decoupled server-side vision and confirmed client-side browser execution | 2026-11-10 | Architecture, Phase 2, Phase 5 |
-| MediaPipe CDN Versioning | Pinned matching `@mediapipe/tasks-vision@0.10.21` for both bundle and WASM | 2026-11-10 | Phase 2 |
-| Geolocation Degradation | SOS alert dispatch is completely decoupled from GPS availability | 2026-11-10 | Phase 2, Phase 4, Phase 5 |
-| Palm Detection Debounce | 350ms temporal grace period to avoid frame jitter resets during 2.0s hold | 2026-11-10 | Phase 2 |
-| Voice Pattern Matching | Word-boundary regex (`\b...\b`) to eliminate substring false positives | 2026-11-10 | Phase 3 |
-| Notification Architecture | Provider-independent abstraction with dedicated `notification_logs` table | 2026-11-10 | Phase 4, Phase 5 |
-| Zero-Cost Live SMS | Fast2SMS Quick Route (`route="q"`) with clean 10-digit number normalization | 2026-11-10 | Phase 5 |
-| Simulated Mode Transparency | Mock provider explicitly returns `status: "simulated"` per PRD mandate | 2026-11-10 | Phase 4, Phase 5 |
-| Rate Limiter Architecture | Thread-safe in-memory sliding window deque with IP/user keying | 2026-11-10 | Phase 5 |
-| System Readiness Telemetry | Real-time 4-sensor matrix based on actual hardware state transitions | 2026-11-10 | Phase 5 |
+| Fall Detection Architecture | Browser DeviceMotionEvent with 15s audible safety prompt before alarm | 2026-11-10 | Architecture, Phase 6 |
+| Live Tracking Breadcrumbs | Relational `sos_location_breadcrumbs` table with REST streaming | 2026-11-10 | Phase 6 |
+| Multi-Contact Escalation | Tier priority levels (1, 2, 3) with acknowledgement halt | 2026-11-10 | Phase 6 |
+| Dead Man's Switch | Safety check-in timer with auto-SOS trigger upon expiration | 2026-11-10 | Phase 6 |
+| Geo-Targeted Emergency Resources | Dynamic Google Maps search centered on live lat/lng coordinates | 2026-11-10 | Phase 6 |
 
 ---
 
 ## Blockers
 
-*None. Phase 5 and end-to-end SMS integration completed with 100% test pass rate.*
+*None. Phase 6 completed with 100% test pass rate.*
 
 ---
 
 ## Concerns / Notes to Monitor
 
-- Fast2SMS Quick route operates on Indian mobile numbers (10 digits). For international routing, Twilio provider is available via `.env`.
+- For mobile browser testing of `DeviceMotionEvent`, iOS requires user gesture permission (`DeviceMotionEvent.requestPermission()`). Android Chrome allows it by default in HTTPS/localhost context. Both are handled gracefully.
