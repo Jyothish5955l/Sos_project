@@ -9,10 +9,13 @@ from datetime import datetime, timedelta
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-DATABASE = os.path.join(
-    BASE_DIR,
-    "data",
-    "sos_guardian.db"
+DATABASE = os.getenv(
+    "DATABASE_PATH",
+    os.path.join(
+        BASE_DIR,
+        "data",
+        "sos_guardian.db"
+    )
 )
 
 

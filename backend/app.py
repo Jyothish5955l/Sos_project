@@ -7,10 +7,11 @@ from datetime import datetime, timedelta
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from dotenv import load_dotenv
-load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), os.getenv("ENV_FILE", ".env")))
 
 from flask import Flask, jsonify, render_template, request, session
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from werkzeug.security import (
     generate_password_hash,
@@ -66,10 +67,29 @@ app.secret_key = os.getenv(
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=os.getenv("FLASK_ENV") == "production",
+    SESSION_COOKIE_SECURE=(
+        os.getenv("FLASK_ENV") == "production"
+        or os.getenv("SESSION_COOKIE_SECURE", "false").lower() in ("true", "1")
+    ),
     PERMANENT_SESSION_LIFETIME=timedelta(days=7),
-    MAX_CONTENT_LENGTH=2 * 1024 * 1024  # 2MB payload protection
+    MAX_CONTENT_LENGTH=2 * 1024 * 1024,  # 2MB payload protection
+    SEND_FILE_MAX_AGE_DEFAULT=int(os.getenv("STATIC_CACHE_SECONDS", "3600"))
 )
+
+# Enable ProxyFix middleware for reverse proxies (Render, Nginx, Cloudflare, ALB)
+app.wsgi_app = ProxyFix(
+    app.wsgi_app,
+    x_for=int(os.getenv("PROXY_FIX_FOR", "1")),
+    x_proto=int(os.getenv("PROXY_FIX_PROTO", "1")),
+    x_host=int(os.getenv("PROXY_FIX_HOST", "1")),
+    x_prefix=int(os.getenv("PROXY_FIX_PREFIX", "1"))
+)
+
+# Idempotently ensure database schema is initialized on application startup
+try:
+    initialize_database()
+except Exception as _db_init_err:
+    print(f"Warning: Database startup check: {_db_init_err}")
 
 CORS(app)
 
@@ -147,17 +167,46 @@ def home():
 
 
 # ============================================================
-# HEALTH CHECK
+# HEALTH CHECKS & SYSTEM DIAGNOSTICS
 # ============================================================
 
+@app.route("/health", methods=["GET"])
 @app.route("/api/health", methods=["GET"])
 def health():
+    db_status = "connected"
+    try:
+        from database import get_connection
+        conn = get_connection()
+        conn.execute("SELECT 1").fetchone()
+        conn.close()
+    except Exception as e:
+        db_status = f"unhealthy: {str(e)}"
+
+    sms_provider = os.getenv("SMS_PROVIDER", "mock").lower()
+    telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    telegram_status = "configured" if telegram_token and not telegram_token.startswith("YOUR_") else "simulated"
+
+    is_healthy = db_status == "connected"
+    status_code = 200 if is_healthy else 503
 
     return jsonify({
-        "success": True,
-        "status": "healthy",
-        "service": "SOS Guardian"
-    })
+        "success": is_healthy,
+        "status": "healthy" if is_healthy else "degraded",
+        "service": "SOS Guardian",
+        "version": "1.0.0",
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "components": {
+            "database": db_status,
+            "sms_provider": sms_provider,
+            "telegram": telegram_status,
+            "rate_limiter": "active"
+        }
+    }), status_code
+
+
+@app.route("/robots.txt", methods=["GET"])
+def robots_txt():
+    return "User-agent: *\nDisallow: /api/\n", 200, {"Content-Type": "text/plain"}
 
 
 # ============================================================
@@ -1404,7 +1453,7 @@ def acknowledge_sos(event_id):
         return jsonify({"success": False, "message": "SOS event not found"}), 404
 
     data = request.get_json() or {}
-    acknowledged_by = (data.get("acknowledged_by") or "Guardian").strip()[:80]
+    acknowledged_by = (data.get("acknowledged_by") or data.get("responder_name") or "Guardian").strip()[:80]
 
     acknowledge_sos_event(event_id, acknowledged_by=acknowledged_by)
     updated_event = get_sos_event_by_id(event_id)
@@ -1412,6 +1461,8 @@ def acknowledge_sos(event_id):
     return jsonify({
         "success": True,
         "message": f"Emergency alert acknowledged by {acknowledged_by}",
+        "status": updated_event["status"] if updated_event else "acknowledged",
+        "acknowledged_by": acknowledged_by,
         "event": updated_event
     }), 200
 
